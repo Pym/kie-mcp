@@ -99,6 +99,9 @@ corrupt MCP stdio messages.
 
 ## Runtime behavior and limits
 
+- Concurrent generation calls are supported. Every task keeps its own task ID, and
+  download directories include that ID even when callers reuse the same
+  `output_name`; the mock suite locks this with three simultaneous generations.
 - Polling retries network errors and HTTP `408`, `429`, and `5xx` responses with
   a delay that grows from two to ten seconds.
 - The upload cache lasts for one server process and is keyed by canonical path,

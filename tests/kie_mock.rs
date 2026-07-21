@@ -1,4 +1,5 @@
 use std::{
+    collections::{HashMap, HashSet},
     net::SocketAddr,
     path::PathBuf,
     sync::{
@@ -11,7 +12,7 @@ use std::{
 use axum::{
     Json, Router,
     body::Bytes,
-    extract::{Query, State},
+    extract::{Path as AxumPath, Query, State},
     http::{HeaderMap, StatusCode},
     response::IntoResponse,
     routing::{get, post},
@@ -32,8 +33,11 @@ struct MockState {
     create_payloads: Arc<Mutex<Vec<Value>>>,
     credit_code: Arc<AtomicUsize>,
     final_state: Arc<Mutex<String>>,
+    media_download_count: Arc<AtomicUsize>,
+    next_task: Arc<AtomicUsize>,
     record_failures: Arc<AtomicUsize>,
     result_json: Arc<Mutex<Option<String>>>,
+    task_models: Arc<Mutex<HashMap<String, String>>>,
     upload_count: Arc<AtomicUsize>,
     record_count: Arc<AtomicUsize>,
 }
@@ -89,6 +93,69 @@ async fn image_generation_uses_modern_job_route_and_downloads_media() {
         format!("{}/input.png", server.base_url)
     );
     assert!(server.state.record_count.load(Ordering::SeqCst) >= 2);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn concurrent_generations_create_distinct_tasks_and_download_without_collisions() {
+    let server = MockServer::start().await;
+    let temp = TempDir::new().unwrap();
+    let client = client_for(&server, temp.path().join("out"));
+    let request = |index| GenerationRequest {
+        model: "gpt-image-2-text-to-image".to_string(),
+        prompt: format!("parallel image {index}"),
+        input_urls: Vec::new(),
+        local_input_paths: Vec::new(),
+        input: json!({}),
+        aspect_ratio: None,
+        resolution: None,
+        output_format: None,
+        output_name: Some("parallel-output".to_string()),
+    };
+
+    let (first, second, third) = tokio::join!(
+        client.generate_and_wait(request(1), GenerationKind::Image),
+        client.generate_and_wait(request(2), GenerationKind::Image),
+        client.generate_and_wait(request(3), GenerationKind::Image),
+    );
+    let results = [first.unwrap(), second.unwrap(), third.unwrap()];
+
+    let task_ids = results
+        .iter()
+        .map(|result| result.task_id.clone())
+        .collect::<HashSet<_>>();
+    assert_eq!(task_ids.len(), 3, "each generation must own one Kie task");
+    assert_eq!(server.state.create_payloads.lock().unwrap().len(), 3);
+    assert_eq!(server.state.media_download_count.load(Ordering::SeqCst), 3);
+
+    let media_paths = results
+        .iter()
+        .map(|result| {
+            assert_eq!(result.media.len(), 1);
+            result.media[0].path.clone()
+        })
+        .collect::<HashSet<_>>();
+    assert_eq!(
+        media_paths.len(),
+        3,
+        "parallel downloads must not overwrite each other"
+    );
+    assert!(media_paths.iter().all(|path| path.exists()));
+
+    let source_urls = results
+        .iter()
+        .flat_map(|result| result.source_urls.iter().cloned())
+        .collect::<HashSet<_>>();
+    assert_eq!(source_urls.len(), 3);
+
+    let mut media_contents = HashSet::new();
+    for path in media_paths {
+        media_contents.insert(tokio::fs::read(path).await.unwrap());
+    }
+    assert_eq!(
+        media_contents.len(),
+        3,
+        "each mocked task must download its own media"
+    );
 }
 
 #[tokio::test]
@@ -676,8 +743,11 @@ impl MockServer {
             create_payloads: Arc::new(Mutex::new(Vec::new())),
             credit_code: Arc::new(AtomicUsize::new(credit_code)),
             final_state: Arc::new(Mutex::new("success".to_string())),
+            media_download_count: Arc::new(AtomicUsize::new(0)),
+            next_task: Arc::new(AtomicUsize::new(0)),
             record_failures: Arc::new(AtomicUsize::new(record_failures)),
             result_json: Arc::new(Mutex::new(result_json)),
+            task_models: Arc::new(Mutex::new(HashMap::new())),
             upload_count: Arc::new(AtomicUsize::new(0)),
             record_count: Arc::new(AtomicUsize::new(0)),
         };
@@ -690,6 +760,7 @@ impl MockServer {
             .route("/media/generated.png", get(media_image))
             .route("/media/generated.mp4", get(media_video))
             .route("/media/poster.png", get(media_poster))
+            .route("/media/{file}", get(media_dynamic))
             .with_state(state.clone());
 
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
@@ -715,17 +786,32 @@ async fn create_task(
     State(state): State<MockState>,
     Json(payload): Json<Value>,
 ) -> impl IntoResponse {
+    let sequence = state.next_task.fetch_add(1, Ordering::SeqCst);
+    let task_id = if sequence == 0 {
+        "task_mock".to_string()
+    } else {
+        format!("task_mock_{}", sequence + 1)
+    };
+    let model = payload["model"]
+        .as_str()
+        .unwrap_or("gpt-image-2-image-to-image")
+        .to_string();
+    state
+        .task_models
+        .lock()
+        .unwrap()
+        .insert(task_id.clone(), model);
     state.create_payloads.lock().unwrap().push(payload);
     Json(json!({
         "code": 200,
         "msg": "success",
-        "data": { "taskId": "task_mock" }
+        "data": { "taskId": task_id }
     }))
 }
 
 async fn record_info(
     State(state): State<MockState>,
-    Query(_query): Query<std::collections::HashMap<String, String>>,
+    Query(query): Query<HashMap<String, String>>,
 ) -> axum::response::Response {
     if state
         .record_failures
@@ -741,21 +827,24 @@ async fn record_info(
             .into_response();
     }
 
+    let task_id = query
+        .get("taskId")
+        .cloned()
+        .unwrap_or_else(|| "task_mock".to_string());
     let model = state
-        .create_payloads
+        .task_models
         .lock()
         .unwrap()
-        .last()
-        .and_then(|payload| payload["model"].as_str())
-        .unwrap_or("gpt-image-2-image-to-image")
-        .to_string();
+        .get(&task_id)
+        .cloned()
+        .unwrap_or_else(|| "gpt-image-2-image-to-image".to_string());
     let count = state.record_count.fetch_add(1, Ordering::SeqCst);
     if count == 0 {
         return Json(json!({
             "code": 200,
             "msg": "success",
             "data": {
-                "taskId": "task_mock",
+                "taskId": task_id,
                 "model": model,
                 "state": "generating",
                 "resultJson": "",
@@ -773,8 +862,10 @@ async fn record_info(
         .unwrap_or_else(|| {
             if model.contains("video") {
                 "{\"videoInfo\":{\"videoUrl\":\"https://kie.example/video-will-be-rewritten\",\"imageUrl\":\"https://kie.example/poster-will-be-rewritten\"}}".to_string()
-            } else {
+            } else if task_id == "task_mock" {
                 "{\"resultUrls\":[\"https://kie.example/will-be-rewritten\"]}".to_string()
+            } else {
+                format!("{{\"resultUrls\":[\"https://kie.example/{task_id}.png\"]}}")
             }
         });
     let final_state = state.final_state.lock().unwrap().clone();
@@ -782,7 +873,7 @@ async fn record_info(
         "code": 200,
         "msg": "success",
         "data": {
-            "taskId": "task_mock",
+            "taskId": task_id,
             "model": model,
             "state": final_state,
             "resultJson": result_json,
@@ -817,11 +908,17 @@ async fn download_url(headers: HeaderMap, Json(payload): Json<Value>) -> axum::r
         return (StatusCode::INTERNAL_SERVER_ERROR, "resolver unavailable").into_response();
     }
     let path = if url.contains("video") {
-        "/media/generated.mp4"
+        "/media/generated.mp4".to_string()
     } else if url.contains("poster") {
-        "/media/poster.png"
+        "/media/poster.png".to_string()
+    } else if let Some(file) = url
+        .rsplit('/')
+        .next()
+        .filter(|file| file.starts_with("task_mock"))
+    {
+        format!("/media/{file}")
     } else {
-        "/media/generated.png"
+        "/media/generated.png".to_string()
     };
     let host = headers
         .get("host")
@@ -864,7 +961,8 @@ async fn upload_file(
     }))
 }
 
-async fn media_image() -> impl IntoResponse {
+async fn media_image(State(state): State<MockState>) -> impl IntoResponse {
+    state.media_download_count.fetch_add(1, Ordering::SeqCst);
     (
         StatusCode::OK,
         [(axum::http::header::CONTENT_TYPE, "image/png")],
@@ -872,7 +970,8 @@ async fn media_image() -> impl IntoResponse {
     )
 }
 
-async fn media_video() -> impl IntoResponse {
+async fn media_video(State(state): State<MockState>) -> impl IntoResponse {
+    state.media_download_count.fetch_add(1, Ordering::SeqCst);
     (
         StatusCode::OK,
         [(axum::http::header::CONTENT_TYPE, "video/mp4")],
@@ -880,10 +979,23 @@ async fn media_video() -> impl IntoResponse {
     )
 }
 
-async fn media_poster() -> impl IntoResponse {
+async fn media_poster(State(state): State<MockState>) -> impl IntoResponse {
+    state.media_download_count.fetch_add(1, Ordering::SeqCst);
     (
         StatusCode::OK,
         [(axum::http::header::CONTENT_TYPE, "image/png")],
         b"poster-bytes",
+    )
+}
+
+async fn media_dynamic(
+    State(state): State<MockState>,
+    AxumPath(file): AxumPath<String>,
+) -> impl IntoResponse {
+    state.media_download_count.fetch_add(1, Ordering::SeqCst);
+    (
+        StatusCode::OK,
+        [(axum::http::header::CONTENT_TYPE, "image/png")],
+        format!("image-bytes-{file}"),
     )
 }

@@ -110,7 +110,7 @@ limitations are documented in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
 ## Development
 
-Tests use a local mock API and do not consume Kie credits.
+Tests use a local mock API and do not consume Kie credits. The concurrency regression test launches three simultaneous mocked generations with the same `output_name` and verifies distinct task IDs, downloads, paths, and contents.
 
 ```bash
 cargo fmt --check
