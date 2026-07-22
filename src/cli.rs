@@ -112,14 +112,9 @@ async fn run_debug(command: DebugCommand) -> Result<()> {
         DebugCommand::Create(args) => {
             let input = tokio::fs::read_to_string(args.input).await?;
             let value: Value = serde_json::from_str(&input)?;
-            let prompt = value
-                .get("prompt")
-                .and_then(Value::as_str)
-                .unwrap_or("")
-                .to_string();
             let request = GenerationRequest {
                 model: args.model,
-                prompt,
+                prompt: String::new(),
                 input_urls: Vec::new(),
                 local_input_paths: Vec::new(),
                 input: value,

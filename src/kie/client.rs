@@ -240,8 +240,8 @@ impl KieClient {
         kind: GenerationKind,
     ) -> Result<String, KieError> {
         validate_model(&request.model, kind)?;
-        validate_generation_request(request)?;
         let spec = super::catalog::resolve_model(&request.model, kind);
+        validate_generation_request(request, spec)?;
         let model = spec.map_or(request.model.as_str(), |spec| spec.id);
         let mut uploaded = Vec::new();
         if has_explicit_media_input(&request.input)

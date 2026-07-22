@@ -18,7 +18,7 @@ use crate::{
     },
 };
 
-const SERVER_INSTRUCTIONS: &str = "Generate Kie.ai images and videos, then use the returned local files. Call kie_models when the requested model is unclear. Put model-specific fields in input, and use input_urls or local_input_paths for reference media.";
+const SERVER_INSTRUCTIONS: &str = "Generate Kie.ai images and videos, then use the returned local files. Call kie_models to inspect prompt policy and media bindings. Put model-specific fields in input, and use input_urls or local_input_paths only for cataloged simple media bindings.";
 
 #[derive(Debug, Clone)]
 pub struct KieMcp {
@@ -43,8 +43,11 @@ pub struct GenerateParams {
         description = "Kie Market model id or catalog alias, for example Nano Banana 2, gpt-image-2-text-to-image, or wan/2-7-text-to-video. Use kie_models when unsure."
     )]
     pub model: String,
-    #[schemars(description = "Prompt to send as input.prompt.")]
-    pub prompt: String,
+    #[serde(default)]
+    #[schemars(
+        description = "Prompt for models whose catalog prompt policy is required or optional. Omit it for promptless models; use kie_models to inspect the policy."
+    )]
+    pub prompt: Option<String>,
     #[serde(default)]
     #[schemars(
         description = "Public URLs to pass to the model. These are merged with uploaded local_input_paths when the selected model accepts an array media input."
@@ -81,7 +84,7 @@ impl From<GenerateParams> for GenerationRequest {
     fn from(value: GenerateParams) -> Self {
         Self {
             model: value.model,
-            prompt: value.prompt,
+            prompt: value.prompt.unwrap_or_default(),
             input_urls: value.input_urls,
             local_input_paths: value.local_input_paths,
             input: Value::Object(value.input),
@@ -184,9 +187,10 @@ impl KieMcp {
                     convenience.join(", ")
                 };
                 format!(
-                    "- {} (`{}`): input {}, convenience {}",
+                    "- {} (`{}`): prompt {}, input {}, convenience {}",
                     model.display_name,
                     model.id,
+                    model.prompt_summary(),
                     model.input_summary(),
                     convenience
                 )

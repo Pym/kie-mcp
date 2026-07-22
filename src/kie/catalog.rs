@@ -11,6 +11,7 @@ pub struct ModelSpec {
     pub id: &'static str,
     pub display_name: &'static str,
     pub kind: GenerationKind,
+    pub prompt_policy: PromptPolicy,
     pub url_binding: UrlBinding,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub aspect_ratio_field: Option<&'static str>,
@@ -23,10 +24,19 @@ pub struct ModelSpec {
 
 #[derive(Debug, Clone, Copy)]
 struct RequestProfile {
+    prompt_policy: PromptPolicy,
     url_binding: UrlBinding,
     aspect_ratio_field: Option<&'static str>,
     resolution_field: Option<&'static str>,
     output_format: OutputFormatStyle,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum PromptPolicy {
+    Required,
+    Optional,
+    None,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
@@ -41,7 +51,10 @@ pub enum UrlBinding {
         #[serde(skip_serializing_if = "Option::is_none")]
         max_items: Option<usize>,
     },
-    FirstLastFrame,
+    FirstLastFrame {
+        first_field: &'static str,
+        last_field: &'static str,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -65,6 +78,14 @@ impl Serialize for OutputFormatStyle {
 }
 
 impl ModelSpec {
+    pub fn prompt_summary(&self) -> &'static str {
+        match self.prompt_policy {
+            PromptPolicy::Required => "required",
+            PromptPolicy::Optional => "optional",
+            PromptPolicy::None => "none",
+        }
+    }
+
     pub fn field_for_convenience(&self, convenience: ConvenienceField) -> Option<&'static str> {
         match convenience {
             ConvenienceField::AspectRatio => self.aspect_ratio_field,
@@ -93,12 +114,14 @@ impl ModelSpec {
         }
     }
 
-    pub fn input_summary(&self) -> &'static str {
+    pub fn input_summary(&self) -> String {
         match self.url_binding {
-            UrlBinding::None => "model-specific input",
-            UrlBinding::Scalar { field } => field,
-            UrlBinding::Array { field, .. } => field,
-            UrlBinding::FirstLastFrame => "first_frame_url/last_frame_url",
+            UrlBinding::None => "model-specific input".to_string(),
+            UrlBinding::Scalar { field } | UrlBinding::Array { field, .. } => field.to_string(),
+            UrlBinding::FirstLastFrame {
+                first_field,
+                last_field,
+            } => format!("{first_field}/{last_field}"),
         }
     }
 
@@ -228,7 +251,9 @@ const AR: Option<&str> = Some("aspect_ratio");
 const RATIO: Option<&str> = Some("ratio");
 const RES: Option<&str> = Some("resolution");
 const IMG_RES: Option<&str> = Some("image_resolution");
+const IMAGE_SIZE: Option<&str> = Some("image_size");
 const OUT_RES: Option<&str> = Some("output_resolution");
+const QUALITY: Option<&str> = Some("quality");
 const OF_NONE: OutputFormatStyle = OutputFormatStyle::None;
 const OF_JPG: OutputFormatStyle = OutputFormatStyle::Jpg;
 const OF_JPEG: OutputFormatStyle = OutputFormatStyle::Jpeg;
@@ -243,7 +268,13 @@ const fn ua(field: &'static str, max_items: Option<usize>) -> UrlBinding {
     UrlBinding::Array { field, max_items }
 }
 const fn ufr() -> UrlBinding {
-    UrlBinding::FirstLastFrame
+    ufrf("first_frame_url", "last_frame_url")
+}
+const fn ufrf(first_field: &'static str, last_field: &'static str) -> UrlBinding {
+    UrlBinding::FirstLastFrame {
+        first_field,
+        last_field,
+    }
 }
 const fn profile(
     url_binding: UrlBinding,
@@ -252,11 +283,20 @@ const fn profile(
     output_format: OutputFormatStyle,
 ) -> RequestProfile {
     RequestProfile {
+        prompt_policy: PromptPolicy::Required,
         url_binding,
         aspect_ratio_field,
         resolution_field,
         output_format,
     }
+}
+const fn optional_prompt(mut profile: RequestProfile) -> RequestProfile {
+    profile.prompt_policy = PromptPolicy::Optional;
+    profile
+}
+const fn no_prompt(mut profile: RequestProfile) -> RequestProfile {
+    profile.prompt_policy = PromptPolicy::None;
+    profile
 }
 const fn model(
     id: &'static str,
@@ -269,6 +309,7 @@ const fn model(
         id,
         display_name,
         kind,
+        prompt_policy: profile.prompt_policy,
         url_binding: profile.url_binding,
         aspect_ratio_field: profile.aspect_ratio_field,
         resolution_field: profile.resolution_field,
@@ -283,7 +324,7 @@ mod tests {
 
     #[test]
     fn compact_catalog_covers_market_image_video_models() {
-        assert!(model_catalog().len() >= 100);
+        assert_eq!(model_catalog().len(), 112);
         assert!(
             model_catalog()
                 .iter()
@@ -329,6 +370,196 @@ mod tests {
 
         let video = resolve_model_any_kind("gemini-omni-video").unwrap();
         assert_eq!(video.kind, GenerationKind::Video);
+    }
+
+    #[test]
+    fn latest_market_image_video_models_are_cataloged() {
+        let expected = [
+            ("seedream/5-pro-text-to-image", GenerationKind::Image),
+            ("seedream/5-pro-image-to-image", GenerationKind::Image),
+            ("qwen2/text-to-image", GenerationKind::Image),
+            ("kling/v2-5-turbo-image-to-video-pro", GenerationKind::Video),
+            ("bytedance/seedance-2-mini", GenerationKind::Video),
+            ("pixverse-v6/text-to-video", GenerationKind::Video),
+            ("pixverse-v6/image-to-video", GenerationKind::Video),
+            ("pixverse-v6/transition", GenerationKind::Video),
+            ("pixverse-v6/extend", GenerationKind::Video),
+            ("pixverse-v6/reference-to-video", GenerationKind::Video),
+        ];
+
+        for (id, kind) in expected {
+            let model = resolve_model(id, kind).unwrap_or_else(|| panic!("missing model {id}"));
+            assert_eq!(model.id, id);
+        }
+    }
+
+    #[test]
+    fn kling_image_to_video_versions_resolve_separately() {
+        let v21 = resolve_model("Kling V2.1 Master Image to Video", GenerationKind::Video)
+            .expect("Kling V2.1 should resolve");
+        assert_eq!(v21.id, "kling/v2-1-master-image-to-video");
+
+        let v25 = resolve_model(
+            "Kling - V2.5 Turbo Image to Video Pro",
+            GenerationKind::Video,
+        )
+        .expect("Kling V2.5 should resolve");
+        assert_eq!(v25.id, "kling/v2-5-turbo-image-to-video-pro");
+        assert_eq!(
+            v25.url_binding,
+            UrlBinding::FirstLastFrame {
+                first_field: "image_url",
+                last_field: "tail_image_url",
+            }
+        );
+    }
+
+    #[test]
+    fn latest_image_profiles_map_documented_common_fields() {
+        let seedream =
+            resolve_model("seedream/5-pro-image-to-image", GenerationKind::Image).unwrap();
+        assert_eq!(
+            seedream.url_binding,
+            UrlBinding::Array {
+                field: "image_urls",
+                max_items: Some(10),
+            }
+        );
+        assert_eq!(seedream.aspect_ratio_field, Some("aspect_ratio"));
+        assert_eq!(seedream.resolution_field, Some("quality"));
+        assert_eq!(seedream.output_format, OutputFormatStyle::Jpeg);
+
+        let qwen = resolve_model("qwen2/text-to-image", GenerationKind::Image).unwrap();
+        assert_eq!(qwen.aspect_ratio_field, Some("image_size"));
+        assert_eq!(qwen.output_format, OutputFormatStyle::Jpeg);
+    }
+
+    #[test]
+    fn corrected_media_bindings_match_documented_contracts() {
+        let pairs = [
+            ("kling/v2-1-pro", "image_url", "tail_image_url"),
+            (
+                "bytedance/v1-lite-image-to-video",
+                "image_url",
+                "end_image_url",
+            ),
+            ("hailuo/02-image-to-video-pro", "image_url", "end_image_url"),
+            (
+                "hailuo/02-image-to-video-standard",
+                "image_url",
+                "end_image_url",
+            ),
+        ];
+        for (id, first_field, last_field) in pairs {
+            let model = resolve_model(id, GenerationKind::Video).unwrap();
+            assert_eq!(
+                model.url_binding,
+                UrlBinding::FirstLastFrame {
+                    first_field,
+                    last_field,
+                },
+                "{id}"
+            );
+        }
+
+        let arrays = [
+            ("grok-imagine-video-1-5-preview", "image_urls", 7),
+            ("ideogram/character", "reference_image_urls", 1),
+            ("kling-3.0/video", "image_urls", 2),
+            ("kling/v3-turbo-image-to-video", "image_urls", 1),
+            ("gemini-omni-video", "image_urls", 7),
+            ("happyhorse/image-to-video", "image_urls", 1),
+        ];
+        for (id, field, max) in arrays {
+            let model = resolve_model_any_kind(id).unwrap();
+            assert_eq!(
+                model.url_binding,
+                UrlBinding::Array {
+                    field,
+                    max_items: Some(max),
+                },
+                "{id}"
+            );
+        }
+
+        let wan = resolve_model("wan/2-7-videoedit", GenerationKind::Video).unwrap();
+        assert_eq!(wan.url_binding, UrlBinding::Scalar { field: "video_url" });
+    }
+
+    #[test]
+    fn corrected_common_fields_match_documented_contracts() {
+        for id in [
+            "seedream/4.5-text-to-image",
+            "seedream/4.5-edit",
+            "seedream/5-lite-text-to-image",
+            "seedream/5-lite-image-to-image",
+            "gpt-image/1.5-text-to-image",
+            "gpt-image/1.5-image-to-image",
+        ] {
+            let model = resolve_model(id, GenerationKind::Image).unwrap();
+            assert_eq!(model.resolution_field, Some("quality"), "{id}");
+        }
+
+        for id in [
+            "seedream/5-lite-text-to-image",
+            "seedream/5-lite-image-to-image",
+        ] {
+            let model = resolve_model(id, GenerationKind::Image).unwrap();
+            assert_eq!(model.output_format, OutputFormatStyle::Jpeg, "{id}");
+        }
+
+        let qwen = resolve_model("qwen2/image-edit", GenerationKind::Image).unwrap();
+        assert_eq!(qwen.aspect_ratio_field, Some("image_size"));
+    }
+
+    #[test]
+    fn non_required_prompt_policies_are_explicit_and_complete() {
+        let optional = model_catalog()
+            .iter()
+            .filter(|model| model.prompt_policy == PromptPolicy::Optional)
+            .map(|model| model.id)
+            .collect::<Vec<_>>();
+        assert_eq!(
+            optional,
+            vec![
+                "grok-imagine/image-to-image",
+                "grok-imagine/image-to-video",
+                "grok-imagine-video-1-5-preview",
+                "kling-2.6/motion-control",
+                "kling-3.0/motion-control",
+                "wan/2-7-videoedit",
+                "happyhorse/image-to-video",
+                "happyhorse-1-1/image-to-video",
+                "omnihuman-1-5",
+            ]
+        );
+
+        let promptless = model_catalog()
+            .iter()
+            .filter(|model| model.prompt_policy == PromptPolicy::None)
+            .map(|model| model.id)
+            .collect::<Vec<_>>();
+        assert_eq!(
+            promptless,
+            vec![
+                "topaz/image-upscale",
+                "recraft/remove-background",
+                "recraft/crisp-upscale",
+                "grok-imagine/upscale",
+                "wan/2-2-animate-move",
+                "wan/2-2-animate-replace",
+                "topaz/video-upscale",
+                "volcengine/video-to-video-lip-sync",
+            ]
+        );
+
+        assert_eq!(
+            model_catalog()
+                .iter()
+                .filter(|model| model.prompt_policy == PromptPolicy::Required)
+                .count(),
+            95
+        );
     }
 
     #[test]

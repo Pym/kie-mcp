@@ -52,12 +52,16 @@ copy of Kie's full schemas. Each entry stores only what the MCP needs for model
 selection and common request assembly:
 
 - canonical ID, display name, kind, and aliases;
+- whether `prompt` is required, optional, or absent;
 - a simple media URL binding when one exists;
 - common aspect ratio, resolution, and output format mappings.
 
 Catalog refreshes are intentionally manual and can be done in a focused Codex
-session. Change the data file, preserve exact-key uniqueness, and add or update a
-representative request-assembly test for any changed binding. Do not add full
+session. Compare every image/video entry with its individual Kie OpenAPI page,
+including prompt policy, URL names and cardinalities, before changing the data
+file. Preserve exact-key uniqueness and update
+`tests/fixtures/kie_catalog_contract.json` only after that review. Its regression
+test locks every catalog entry and compact request contract. Do not add full
 model schemas to the binary; uncommon fields belong in `input` and in Kie's own
 documentation.
 
@@ -114,7 +118,10 @@ corrupt MCP stdio messages.
 - Result extraction supports common Kie fields and retains a generic fallback
   for model response shapes not represented by the catalog.
 - The local catalog can lag behind Kie's availability and capabilities. Raw
-  model IDs are accepted only when their media kind can be inferred safely.
+  model IDs are accepted only when their media kind can be inferred safely, and
+  all model-specific fields must then be supplied directly in `input`. Top-level
+  prompt, media, aspect-ratio, resolution, and output-format shortcuts are not
+  guessed for uncataloged models.
 
 ## Verification
 

@@ -99,6 +99,11 @@ async fn stdio_server_lists_kie_tools() {
     let properties = &image_tool["inputSchema"]["properties"];
     let input_schema = &properties["input"];
     assert_eq!(input_schema["type"], "object");
+    let required = image_tool["inputSchema"]["required"]
+        .as_array()
+        .expect("tool schema should list required fields");
+    assert!(required.iter().any(|field| field == "model"));
+    assert!(!required.iter().any(|field| field == "prompt"));
 
     child.kill().await.unwrap();
 }

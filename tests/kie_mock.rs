@@ -365,6 +365,69 @@ async fn invalid_input_url_is_rejected_before_local_upload() {
 }
 
 #[tokio::test]
+async fn uncataloged_model_shortcuts_are_rejected_before_local_upload() {
+    let server = MockServer::start().await;
+    let temp = TempDir::new().unwrap();
+    let local = temp.path().join("input.png");
+    tokio::fs::write(&local, b"local-image").await.unwrap();
+    let client = client_for(&server, temp.path().join("out"));
+
+    let error = client
+        .create_task(
+            &GenerationRequest {
+                model: "future-image-to-video".to_string(),
+                prompt: String::new(),
+                input_urls: Vec::new(),
+                local_input_paths: vec![local],
+                input: json!({ "prompt": "animate this image" }),
+                aspect_ratio: None,
+                resolution: None,
+                output_format: None,
+                output_name: None,
+            },
+            GenerationKind::Video,
+        )
+        .await
+        .unwrap_err();
+
+    assert!(error.to_string().contains("top-level local_input_paths"));
+    assert_eq!(server.state.upload_count.load(Ordering::SeqCst), 0);
+    assert!(server.state.create_payloads.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn promptless_model_does_not_send_legacy_prompt() {
+    let server = MockServer::start().await;
+    let temp = TempDir::new().unwrap();
+    let client = client_for(&server, temp.path().join("out"));
+
+    client
+        .create_task(
+            &GenerationRequest {
+                model: "topaz/image-upscale".to_string(),
+                prompt: "legacy required prompt".to_string(),
+                input_urls: vec![format!("{}/input.png", server.base_url)],
+                local_input_paths: Vec::new(),
+                input: json!({}),
+                aspect_ratio: None,
+                resolution: None,
+                output_format: None,
+                output_name: None,
+            },
+            GenerationKind::Image,
+        )
+        .await
+        .unwrap();
+
+    let payloads = server.state.create_payloads.lock().unwrap();
+    assert_eq!(
+        payloads[0]["input"]["image_url"],
+        format!("{}/input.png", server.base_url)
+    );
+    assert!(payloads[0]["input"].get("prompt").is_none());
+}
+
+#[tokio::test]
 async fn upload_cache_reuses_same_local_file_in_session() {
     let server = MockServer::start().await;
     let temp = TempDir::new().unwrap();

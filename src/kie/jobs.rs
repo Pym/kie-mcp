@@ -8,7 +8,7 @@ use crate::media::SavedMedia;
 
 use super::{
     KieError,
-    catalog::{self, ConvenienceField, UrlBinding},
+    catalog::{self, ConvenienceField, PromptPolicy, UrlBinding},
 };
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
@@ -30,6 +30,7 @@ impl GenerationKind {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct GenerationRequest {
     pub model: String,
+    #[serde(default)]
     pub prompt: String,
     #[serde(default)]
     pub input_urls: Vec<String>,
@@ -205,7 +206,7 @@ pub fn create_task_payload(
     model: &str,
     spec: Option<&catalog::ModelSpec>,
 ) -> Result<Value, KieError> {
-    validate_generation_request(request)?;
+    validate_generation_request(request, spec)?;
 
     let mut input = match &request.input {
         Value::Object(map) => map.clone(),
@@ -213,7 +214,7 @@ pub fn create_task_payload(
         _ => unreachable!("generation request input was validated"),
     };
 
-    input.insert("prompt".to_string(), Value::String(request.prompt.clone()));
+    apply_prompt(&mut input, request, spec);
     insert_convenience(
         &mut input,
         spec,
@@ -231,7 +232,7 @@ pub fn create_task_payload(
     let mut urls = request.input_urls.clone();
     urls.extend(uploaded.iter().map(|item| item.url.clone()));
     if !urls.is_empty() {
-        add_urls_to_input(&mut input, model, spec, &urls)?;
+        add_urls_to_input(&mut input, spec, &urls)?;
     }
 
     Ok(json!({
@@ -240,11 +241,10 @@ pub fn create_task_payload(
     }))
 }
 
-pub fn validate_generation_request(request: &GenerationRequest) -> Result<(), KieError> {
-    if request.prompt.trim().is_empty() {
-        return Err(KieError::EmptyPrompt);
-    }
-
+pub fn validate_generation_request(
+    request: &GenerationRequest,
+    spec: Option<&catalog::ModelSpec>,
+) -> Result<(), KieError> {
     match &request.input {
         Value::Object(_) | Value::Null => {}
         _ => {
@@ -254,7 +254,75 @@ pub fn validate_generation_request(request: &GenerationRequest) -> Result<(), Ki
         }
     }
 
-    validate_input_urls(&request.input_urls)
+    validate_input_urls(&request.input_urls)?;
+    validate_uncataloged_shortcuts(request, spec)?;
+
+    if spec.is_some_and(|spec| spec.prompt_policy == PromptPolicy::Required)
+        && request.prompt.trim().is_empty()
+        && request
+            .input
+            .as_object()
+            .and_then(|input| input.get("prompt"))
+            .and_then(Value::as_str)
+            .is_none_or(|prompt| prompt.trim().is_empty())
+    {
+        return Err(KieError::EmptyPrompt);
+    }
+
+    Ok(())
+}
+
+fn validate_uncataloged_shortcuts(
+    request: &GenerationRequest,
+    spec: Option<&catalog::ModelSpec>,
+) -> Result<(), KieError> {
+    if spec.is_some() {
+        return Ok(());
+    }
+
+    let shortcut = if !request.prompt.trim().is_empty() {
+        Some("prompt")
+    } else if !request.input_urls.is_empty() {
+        Some("input_urls")
+    } else if !request.local_input_paths.is_empty() {
+        Some("local_input_paths")
+    } else if request.aspect_ratio.is_some() {
+        Some("aspect_ratio")
+    } else if request.resolution.is_some() {
+        Some("resolution")
+    } else if request.output_format.is_some() {
+        Some("output_format")
+    } else {
+        None
+    };
+
+    if let Some(shortcut) = shortcut {
+        return Err(KieError::InvalidRequest {
+            message: format!(
+                "uncataloged model {} cannot safely map top-level {shortcut}; pass every model-specific Kie field in input",
+                request.model
+            ),
+        });
+    }
+
+    Ok(())
+}
+
+fn apply_prompt(
+    input: &mut serde_json::Map<String, Value>,
+    request: &GenerationRequest,
+    spec: Option<&catalog::ModelSpec>,
+) {
+    let Some(spec) = spec else {
+        return;
+    };
+    if spec.prompt_policy == PromptPolicy::None {
+        input.remove("prompt");
+        return;
+    }
+    if !request.prompt.trim().is_empty() {
+        input.insert("prompt".to_string(), Value::String(request.prompt.clone()));
+    }
 }
 
 fn validate_input_urls(urls: &[String]) -> Result<(), KieError> {
@@ -318,13 +386,15 @@ fn is_explicit_media_input_field(field: &str) -> bool {
                 field: catalog_field,
                 ..
             } => field == catalog_field,
-            UrlBinding::FirstLastFrame => matches!(field, "first_frame_url" | "last_frame_url"),
+            UrlBinding::FirstLastFrame {
+                first_field,
+                last_field,
+            } => field == first_field || field == last_field,
         })
 }
 
 fn add_urls_to_input(
     input: &mut serde_json::Map<String, Value>,
-    model: &str,
     spec: Option<&catalog::ModelSpec>,
     urls: &[String],
 ) -> Result<(), KieError> {
@@ -337,92 +407,65 @@ fn add_urls_to_input(
         });
     }
 
-    if let Some(spec) = spec {
-        match spec.url_binding {
-            UrlBinding::None => {
+    let Some(spec) = spec else {
+        return Err(KieError::InvalidRequest {
+            message: "uncataloged models require model-specific media fields in input".to_string(),
+        });
+    };
+    match spec.url_binding {
+        UrlBinding::None => Err(KieError::InvalidRequest {
+            message: format!(
+                "{} does not expose a simple media URL binding; pass model-specific media fields in input",
+                spec.id
+            ),
+        }),
+        UrlBinding::Scalar { field } => {
+            if urls.len() != 1 {
                 return Err(KieError::InvalidRequest {
                     message: format!(
-                        "{} does not expose a simple media URL binding; pass model-specific media fields in input",
-                        spec.id
+                        "{} field {} accepts exactly one input URL, got {}; choose one media input or use a model that accepts multiple inputs",
+                        spec.id,
+                        field,
+                        urls.len()
                     ),
                 });
             }
-            UrlBinding::Scalar { field } => {
-                if urls.len() != 1 {
-                    return Err(KieError::InvalidRequest {
-                        message: format!(
-                            "{} field {} accepts exactly one input URL, got {}; choose one media input or use a model that accepts multiple inputs",
-                            spec.id,
-                            field,
-                            urls.len()
-                        ),
-                    });
-                }
-                insert_scalar_url(input, field, &urls[0]);
-                return Ok(());
+            insert_scalar_url(input, field, &urls[0]);
+            Ok(())
+        }
+        UrlBinding::Array { field, max_items } => {
+            if let Some(max) = max_items
+                && urls.len() > max
+            {
+                return Err(KieError::InvalidRequest {
+                    message: format!(
+                        "{} field {} accepts at most {max} input URL(s), got {}",
+                        spec.id,
+                        field,
+                        urls.len()
+                    ),
+                });
             }
-            UrlBinding::Array { field, max_items } => {
-                if let Some(max) = max_items
-                    && urls.len() > max
-                {
-                    return Err(KieError::InvalidRequest {
-                        message: format!(
-                            "{} field {} accepts at most {max} input URL(s), got {}",
-                            spec.id,
-                            field,
-                            urls.len()
-                        ),
-                    });
-                }
-                insert_array_urls(input, field, urls);
-                return Ok(());
+            insert_array_urls(input, field, urls);
+            Ok(())
+        }
+        UrlBinding::FirstLastFrame {
+            first_field,
+            last_field,
+        } => {
+            if urls.len() > 2 {
+                return Err(KieError::InvalidRequest {
+                    message: format!(
+                        "{} accepts at most two ordered media URLs, got {}",
+                        spec.id,
+                        urls.len()
+                    ),
+                });
             }
-            UrlBinding::FirstLastFrame => {
-                if urls.len() > 2 {
-                    return Err(KieError::InvalidRequest {
-                        message: format!(
-                            "{} accepts at most first and last frame URLs, got {}",
-                            spec.id,
-                            urls.len()
-                        ),
-                    });
-                }
-                insert_first_last_frames(input, urls);
-                return Ok(());
-            }
+            insert_first_last_frames(input, first_field, last_field, urls);
+            Ok(())
         }
     }
-
-    if model.contains("image-to-video") {
-        if urls.len() > 2 {
-            return Err(KieError::InvalidRequest {
-                message: format!(
-                    "{model} accepts at most first and last frame URLs, got {}",
-                    urls.len()
-                ),
-            });
-        }
-        input.insert(
-            "first_frame_url".to_string(),
-            Value::String(urls[0].clone()),
-        );
-        if let Some(last) = urls.get(1) {
-            input.insert("last_frame_url".to_string(), Value::String(last.clone()));
-        }
-    } else if model.contains("image-to-image") || model.contains("gpt-image") {
-        input.insert(
-            "input_urls".to_string(),
-            Value::Array(urls.iter().cloned().map(Value::String).collect()),
-        );
-    } else if urls.len() == 1 {
-        input.insert("image".to_string(), Value::String(urls[0].clone()));
-    } else {
-        input.insert(
-            "input_urls".to_string(),
-            Value::Array(urls.iter().cloned().map(Value::String).collect()),
-        );
-    }
-    Ok(())
 }
 
 fn insert_scalar_url(input: &mut serde_json::Map<String, Value>, field: &str, url: &str) {
@@ -436,13 +479,15 @@ fn insert_array_urls(input: &mut serde_json::Map<String, Value>, field: &str, ur
     );
 }
 
-fn insert_first_last_frames(input: &mut serde_json::Map<String, Value>, urls: &[String]) {
-    input.insert(
-        "first_frame_url".to_string(),
-        Value::String(urls[0].clone()),
-    );
+fn insert_first_last_frames(
+    input: &mut serde_json::Map<String, Value>,
+    first_field: &str,
+    last_field: &str,
+    urls: &[String],
+) {
+    input.insert(first_field.to_string(), Value::String(urls[0].clone()));
     if let Some(last) = urls.get(1) {
-        input.insert("last_frame_url".to_string(), Value::String(last.clone()));
+        input.insert(last_field.to_string(), Value::String(last.clone()));
     }
 }
 
@@ -454,18 +499,7 @@ fn insert_convenience(
 ) -> Result<(), KieError> {
     if let Some(value) = value {
         let Some(spec) = spec else {
-            let fallback = match convenience {
-                ConvenienceField::AspectRatio => "aspect_ratio",
-                ConvenienceField::Resolution => "resolution",
-                ConvenienceField::OutputFormat => "output_format",
-            };
-            replace_convenience_value(
-                input,
-                convenience,
-                fallback,
-                Value::String(value.to_string()),
-            );
-            return Ok(());
+            return Err(unmapped_convenience_error(convenience));
         };
         let Some(field) = spec.field_for_convenience(convenience) else {
             return Err(KieError::InvalidRequest {
@@ -493,13 +527,7 @@ fn insert_output_format(
 ) -> Result<(), KieError> {
     if let Some(value) = value {
         let Some(spec) = spec else {
-            replace_convenience_value(
-                input,
-                ConvenienceField::OutputFormat,
-                "output_format",
-                Value::String(normalize_output_format_fallback(value)),
-            );
-            return Ok(());
+            return Err(unmapped_convenience_error(ConvenienceField::OutputFormat));
         };
         let Some(value) = spec.output_format_value(value) else {
             return Err(KieError::InvalidRequest {
@@ -603,14 +631,6 @@ fn convenience_aliases_for_field(convenience: ConvenienceField, field: &str) -> 
     aliases
 }
 
-fn normalize_output_format_fallback(value: &str) -> String {
-    match value.to_ascii_lowercase().as_str() {
-        "jpg" | "jpeg" => "jpg".to_string(),
-        "png" => "png".to_string(),
-        _ => value.to_string(),
-    }
-}
-
 fn convenience_name(convenience: ConvenienceField) -> &'static str {
     match convenience {
         ConvenienceField::AspectRatio => "aspect_ratio",
@@ -619,20 +639,22 @@ fn convenience_name(convenience: ConvenienceField) -> &'static str {
     }
 }
 
+fn unmapped_convenience_error(convenience: ConvenienceField) -> KieError {
+    KieError::InvalidRequest {
+        message: format!(
+            "uncataloged models cannot safely map top-level {}; pass the exact Kie field in input",
+            convenience_name(convenience)
+        ),
+    }
+}
+
 pub fn model_kind(model: &str) -> Option<GenerationKind> {
     let lowered = model.to_ascii_lowercase();
-    if lowered.contains("audio")
-        || lowered.contains("speech")
-        || lowered.contains("voice")
-        || lowered.contains("chat")
-        || lowered.contains("gemini")
-        || lowered.contains("claude")
-    {
+    if lowered.contains("chat") || lowered.contains("claude") {
         return None;
     }
     if lowered.contains("video")
         || lowered.contains("kling")
-        || lowered.contains("wan/")
         || lowered.contains("sora")
         || lowered.contains("runway")
         || lowered.contains("hailuo")
@@ -640,6 +662,9 @@ pub fn model_kind(model: &str) -> Option<GenerationKind> {
         || lowered.contains("seedance")
     {
         return Some(GenerationKind::Video);
+    }
+    if lowered.contains("audio") || lowered.contains("speech") || lowered.contains("voice") {
+        return None;
     }
     if lowered.contains("image")
         || lowered.contains("imagen")
@@ -804,6 +829,216 @@ mod tests {
     }
 
     #[test]
+    fn model_specific_first_last_frame_fields_are_used() {
+        let cases = [
+            (
+                "kling/v2-5-turbo-image-to-video-pro",
+                "image_url",
+                "tail_image_url",
+            ),
+            ("kling/v2-1-pro", "image_url", "tail_image_url"),
+            (
+                "bytedance/v1-lite-image-to-video",
+                "image_url",
+                "end_image_url",
+            ),
+            ("hailuo/02-image-to-video-pro", "image_url", "end_image_url"),
+            (
+                "hailuo/02-image-to-video-standard",
+                "image_url",
+                "end_image_url",
+            ),
+            (
+                "pixverse-v6/transition",
+                "first_frame_image_url",
+                "last_frame_image_url",
+            ),
+        ];
+
+        for (model, first_field, last_field) in cases {
+            let mut request = request(model);
+            request.input_urls = vec![
+                "https://example.com/first.png".to_string(),
+                "https://example.com/last.png".to_string(),
+            ];
+            let spec = catalog::resolve_model(model, GenerationKind::Video);
+            let payload = create_task_payload(&request, &[], model, spec).unwrap();
+
+            assert_eq!(
+                payload["input"][first_field],
+                "https://example.com/first.png"
+            );
+            assert_eq!(payload["input"][last_field], "https://example.com/last.png");
+        }
+    }
+
+    #[test]
+    fn corrected_array_limits_accept_the_boundary_and_reject_one_more() {
+        let cases = [
+            ("grok-imagine-video-1-5-preview", 7),
+            ("ideogram/character", 1),
+            ("kling-3.0/video", 2),
+            ("kling/v3-turbo-image-to-video", 1),
+            ("gemini-omni-video", 7),
+            ("happyhorse/image-to-video", 1),
+        ];
+
+        for (model, max) in cases {
+            let mut request = request(model);
+            request.input_urls = (0..max)
+                .map(|index| format!("https://example.com/{index}.png"))
+                .collect();
+            let spec = catalog::resolve_model_any_kind(model);
+            assert!(
+                create_task_payload(&request, &[], model, spec).is_ok(),
+                "{model} should accept {max} URL(s)"
+            );
+
+            request
+                .input_urls
+                .push("https://example.com/overflow.png".to_string());
+            let error = create_task_payload(&request, &[], model, spec).unwrap_err();
+            assert!(error.to_string().contains("accepts at most"), "{model}");
+        }
+    }
+
+    #[test]
+    fn newly_bound_simple_media_fields_are_assembled() {
+        let cases = [
+            ("wan/2-7-videoedit", "video_url", false),
+            ("happyhorse/image-to-video", "image_urls", true),
+        ];
+
+        for (model, field, array) in cases {
+            let mut request = request(model);
+            request.input_urls = vec!["https://example.com/input.mp4".to_string()];
+            let spec = catalog::resolve_model(model, GenerationKind::Video);
+            let payload = create_task_payload(&request, &[], model, spec).unwrap();
+            if array {
+                assert_eq!(
+                    payload["input"][field],
+                    json!(["https://example.com/input.mp4"]),
+                    "{model}"
+                );
+            } else {
+                assert_eq!(
+                    payload["input"][field], "https://example.com/input.mp4",
+                    "{model}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn latest_model_convenience_fields_use_documented_names() {
+        let mut qwen = request("qwen2/text-to-image");
+        qwen.aspect_ratio = Some("16:9".to_string());
+        qwen.output_format = Some("jpg".to_string());
+        let qwen_spec = catalog::resolve_model(&qwen.model, GenerationKind::Image);
+        let qwen_payload = create_task_payload(&qwen, &[], &qwen.model, qwen_spec).unwrap();
+        assert_eq!(qwen_payload["input"]["image_size"], "16:9");
+        assert_eq!(qwen_payload["input"]["output_format"], "jpeg");
+
+        let mut pixverse = request("pixverse-v6/text-to-video");
+        pixverse.resolution = Some("1080p".to_string());
+        let pixverse_spec = catalog::resolve_model(&pixverse.model, GenerationKind::Video);
+        let pixverse_payload =
+            create_task_payload(&pixverse, &[], &pixverse.model, pixverse_spec).unwrap();
+        assert_eq!(pixverse_payload["input"]["quality"], "1080p");
+        assert!(pixverse_payload["input"].get("resolution").is_none());
+    }
+
+    #[test]
+    fn corrected_image_conveniences_use_documented_fields_and_values() {
+        let mut seedream = request("seedream/5-lite-text-to-image");
+        seedream.resolution = Some("high".to_string());
+        seedream.output_format = Some("jpg".to_string());
+        let seedream_spec = catalog::resolve_model(&seedream.model, GenerationKind::Image);
+        let seedream_payload =
+            create_task_payload(&seedream, &[], &seedream.model, seedream_spec).unwrap();
+        assert_eq!(seedream_payload["input"]["quality"], "high");
+        assert_eq!(seedream_payload["input"]["output_format"], "jpeg");
+
+        let mut qwen = request("qwen2/image-edit");
+        qwen.aspect_ratio = Some("16:9".to_string());
+        let qwen_spec = catalog::resolve_model(&qwen.model, GenerationKind::Image);
+        let qwen_payload = create_task_payload(&qwen, &[], &qwen.model, qwen_spec).unwrap();
+        assert_eq!(qwen_payload["input"]["image_size"], "16:9");
+    }
+
+    #[test]
+    fn prompt_policy_controls_validation_and_payload_assembly() {
+        let mut required = request("gpt-image-2-text-to-image");
+        required.prompt.clear();
+        let required_spec = catalog::resolve_model(&required.model, GenerationKind::Image);
+        assert!(matches!(
+            create_task_payload(&required, &[], &required.model, required_spec),
+            Err(KieError::EmptyPrompt)
+        ));
+
+        required.input = json!({ "prompt": "prompt supplied in raw input" });
+        let payload = create_task_payload(&required, &[], &required.model, required_spec).unwrap();
+        assert_eq!(payload["input"]["prompt"], "prompt supplied in raw input");
+
+        let mut optional = request("grok-imagine/image-to-video");
+        optional.prompt.clear();
+        let optional_spec = catalog::resolve_model(&optional.model, GenerationKind::Video);
+        let payload = create_task_payload(&optional, &[], &optional.model, optional_spec).unwrap();
+        assert!(payload["input"].get("prompt").is_none());
+
+        let mut promptless = request("topaz/image-upscale");
+        promptless.input_urls = vec!["https://example.com/input.png".to_string()];
+        promptless.input = json!({ "prompt": "also ignored" });
+        let promptless_spec = catalog::resolve_model(&promptless.model, GenerationKind::Image);
+        let payload =
+            create_task_payload(&promptless, &[], &promptless.model, promptless_spec).unwrap();
+        assert!(payload["input"].get("prompt").is_none());
+    }
+
+    #[test]
+    fn uncataloged_models_require_explicit_model_specific_input() {
+        let mut request = request("future-image-to-video");
+        request.prompt.clear();
+        request.input = json!({
+            "prompt": "future prompt",
+            "image_url": "https://example.com/input.png"
+        });
+        let payload = create_task_payload(&request, &[], &request.model, None).unwrap();
+        assert_eq!(payload["input"], request.input);
+
+        request.prompt = "unsafe shortcut".to_string();
+        let error = create_task_payload(&request, &[], &request.model, None).unwrap_err();
+        assert!(error.to_string().contains("top-level prompt"));
+
+        request.prompt.clear();
+        request.input_urls = vec!["https://example.com/input.png".to_string()];
+        let error = create_task_payload(&request, &[], &request.model, None).unwrap_err();
+        assert!(error.to_string().contains("top-level input_urls"));
+
+        request.input_urls.clear();
+        request.aspect_ratio = Some("16:9".to_string());
+        let error = create_task_payload(&request, &[], &request.model, None).unwrap_err();
+        assert!(error.to_string().contains("top-level aspect_ratio"));
+    }
+
+    #[test]
+    fn raw_model_kind_inference_prioritizes_output_media() {
+        assert_eq!(
+            model_kind("future/speech-to-video"),
+            Some(GenerationKind::Video)
+        );
+        assert_eq!(
+            model_kind("future/gemini-image-generator"),
+            Some(GenerationKind::Image)
+        );
+        assert_eq!(
+            model_kind("future/gemini-video-generator"),
+            Some(GenerationKind::Video)
+        );
+        assert_eq!(model_kind("wan/future-image"), Some(GenerationKind::Image));
+    }
+
+    #[test]
     fn known_catalog_models_do_not_validate_for_wrong_kind() {
         let err = validate_model("wan/2-7-image", GenerationKind::Video).unwrap_err();
         assert!(matches!(err, KieError::UnsupportedModel { .. }));
@@ -830,9 +1065,12 @@ mod tests {
                         model.id
                     );
                 }
-                UrlBinding::FirstLastFrame => {
-                    assert!(is_explicit_media_input_field("first_frame_url"));
-                    assert!(is_explicit_media_input_field("last_frame_url"));
+                UrlBinding::FirstLastFrame {
+                    first_field,
+                    last_field,
+                } => {
+                    assert!(is_explicit_media_input_field(first_field));
+                    assert!(is_explicit_media_input_field(last_field));
                 }
             }
         }
@@ -861,14 +1099,16 @@ mod tests {
         for value in ["not a URL", "file:///tmp/input.png", "https://"] {
             let mut request = request("nano-banana-2");
             request.input_urls = vec![value.to_string()];
+            let spec = catalog::resolve_model(&request.model, GenerationKind::Image);
 
-            let err = validate_generation_request(&request).unwrap_err();
+            let err = validate_generation_request(&request, spec).unwrap_err();
             assert!(err.to_string().contains("input_urls[0]"), "{value}");
         }
 
         let mut request = request("nano-banana-2");
         request.input_urls = vec!["https://example.com/input.png?token=secret".to_string()];
-        assert!(validate_generation_request(&request).is_ok());
+        let spec = catalog::resolve_model(&request.model, GenerationKind::Image);
+        assert!(validate_generation_request(&request, spec).is_ok());
     }
 
     #[test]

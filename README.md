@@ -77,13 +77,17 @@ The server exposes six tools:
 | `kie_upload_media` | Upload a local file for model-specific workflows. |
 | `kie_credits` | Read the current account credit balance. |
 
-Generation tools accept a model, a prompt, and optional convenience fields such
-as `aspect_ratio`, `resolution`, and `output_format`. Model-specific Kie fields
-go in `input`. The tool schemas tell the agent which fields are available; use
-`kie_models` when a model name or media binding is unclear.
+Generation tools accept a model, a model-aware optional `prompt`, and convenience
+fields such as `aspect_ratio`, `resolution`, and `output_format`. `kie_models`
+reports whether each model requires, optionally accepts, or does not use a
+prompt. A legacy prompt supplied to a promptless model is not forwarded to Kie.
+Model-specific Kie fields go in `input`.
 
 For reference media, pass public URLs through `input_urls` or local image/video
-files through `local_input_paths`. Local files are uploaded automatically.
+files through `local_input_paths`. Local files are uploaded automatically. These
+shortcuts require a cataloged media binding; for an uncataloged raw model ID,
+put every model-specific field directly in `input` so the server does not guess
+Kie's field names.
 
 ## Files and settings
 

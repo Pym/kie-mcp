@@ -1,0 +1,1377 @@
+{
+  "source": "https://docs.kie.ai/llms.txt",
+  "verified_at": "2026-07-22",
+  "llms_sha256": "a943c9a51df2cef8fe980af1f6e0216e4da9d85a9eb6d6308c73052c1d8f8000",
+  "models": [
+    {
+      "display_name": "Seedream3.0 - Text to Image",
+      "id": "bytedance/seedream",
+      "kind": "image",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "url_binding": {
+        "type": "none"
+      }
+    },
+    {
+      "display_name": "Seedream4.0 - Text to Image",
+      "id": "bytedance/seedream-v4-text-to-image",
+      "kind": "image",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "resolution_field": "image_resolution",
+      "url_binding": {
+        "type": "none"
+      }
+    },
+    {
+      "display_name": "Seedream4.0 - Edit",
+      "id": "bytedance/seedream-v4-edit",
+      "kind": "image",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "resolution_field": "image_resolution",
+      "url_binding": {
+        "field": "image_urls",
+        "max_items": 10,
+        "type": "array"
+      }
+    },
+    {
+      "aspect_ratio_field": "aspect_ratio",
+      "display_name": "Seedream4.5 - Text to Image",
+      "id": "seedream/4.5-text-to-image",
+      "kind": "image",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "resolution_field": "quality",
+      "url_binding": {
+        "type": "none"
+      }
+    },
+    {
+      "aspect_ratio_field": "aspect_ratio",
+      "display_name": "Seedream4.5 - Edit",
+      "id": "seedream/4.5-edit",
+      "kind": "image",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "resolution_field": "quality",
+      "url_binding": {
+        "field": "image_urls",
+        "max_items": 14,
+        "type": "array"
+      }
+    },
+    {
+      "aspect_ratio_field": "aspect_ratio",
+      "display_name": "Seedream5.0 Lite - Text to Image",
+      "id": "seedream/5-lite-text-to-image",
+      "kind": "image",
+      "output_format": "jpeg_png",
+      "prompt_policy": "required",
+      "resolution_field": "quality",
+      "url_binding": {
+        "type": "none"
+      }
+    },
+    {
+      "aspect_ratio_field": "aspect_ratio",
+      "display_name": "Seedream5.0 Lite - Image to Image",
+      "id": "seedream/5-lite-image-to-image",
+      "kind": "image",
+      "output_format": "jpeg_png",
+      "prompt_policy": "required",
+      "resolution_field": "quality",
+      "url_binding": {
+        "field": "image_urls",
+        "max_items": 14,
+        "type": "array"
+      }
+    },
+    {
+      "aspect_ratio_field": "aspect_ratio",
+      "display_name": "Seedream5.0 Pro - Text to Image",
+      "id": "seedream/5-pro-text-to-image",
+      "kind": "image",
+      "output_format": "jpeg_png",
+      "prompt_policy": "required",
+      "resolution_field": "quality",
+      "url_binding": {
+        "type": "none"
+      }
+    },
+    {
+      "aspect_ratio_field": "aspect_ratio",
+      "display_name": "Seedream5.0 Pro - Image to Image",
+      "id": "seedream/5-pro-image-to-image",
+      "kind": "image",
+      "output_format": "jpeg_png",
+      "prompt_policy": "required",
+      "resolution_field": "quality",
+      "url_binding": {
+        "field": "image_urls",
+        "max_items": 10,
+        "type": "array"
+      }
+    },
+    {
+      "aspect_ratio_field": "aspect_ratio",
+      "display_name": "Z-Image",
+      "id": "z-image",
+      "kind": "image",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "url_binding": {
+        "type": "none"
+      }
+    },
+    {
+      "aspect_ratio_field": "aspect_ratio",
+      "display_name": "Google - imagen4-fast",
+      "id": "google/imagen4-fast",
+      "kind": "image",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "url_binding": {
+        "type": "none"
+      }
+    },
+    {
+      "aspect_ratio_field": "aspect_ratio",
+      "display_name": "Google - imagen4-ultra",
+      "id": "google/imagen4-ultra",
+      "kind": "image",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "url_binding": {
+        "type": "none"
+      }
+    },
+    {
+      "aspect_ratio_field": "aspect_ratio",
+      "display_name": "Google - imagen4",
+      "id": "google/imagen4",
+      "kind": "image",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "url_binding": {
+        "type": "none"
+      }
+    },
+    {
+      "aliases": [
+        "Nano Banana Edit"
+      ],
+      "aspect_ratio_field": "aspect_ratio",
+      "display_name": "Google - Nano Banana Edit",
+      "id": "google/nano-banana-edit",
+      "kind": "image",
+      "output_format": "jpeg_png",
+      "prompt_policy": "required",
+      "url_binding": {
+        "field": "image_urls",
+        "max_items": 10,
+        "type": "array"
+      }
+    },
+    {
+      "aliases": [
+        "Nano Banana"
+      ],
+      "aspect_ratio_field": "aspect_ratio",
+      "display_name": "Google - Nano Banana",
+      "id": "google/nano-banana",
+      "kind": "image",
+      "output_format": "jpeg_png",
+      "prompt_policy": "required",
+      "url_binding": {
+        "type": "none"
+      }
+    },
+    {
+      "aliases": [
+        "Nano Banana Pro",
+        "NanoBananaPro"
+      ],
+      "aspect_ratio_field": "aspect_ratio",
+      "display_name": "Google - Nano Banana Pro",
+      "id": "nano-banana-pro",
+      "kind": "image",
+      "output_format": "jpg_png",
+      "prompt_policy": "required",
+      "resolution_field": "resolution",
+      "url_binding": {
+        "field": "image_input",
+        "max_items": 8,
+        "type": "array"
+      }
+    },
+    {
+      "aliases": [
+        "Nano Banana 2",
+        "NanoBanana2"
+      ],
+      "aspect_ratio_field": "aspect_ratio",
+      "display_name": "Google - Nano Banana 2",
+      "id": "nano-banana-2",
+      "kind": "image",
+      "output_format": "jpg_png",
+      "prompt_policy": "required",
+      "resolution_field": "resolution",
+      "url_binding": {
+        "field": "image_input",
+        "max_items": 14,
+        "type": "array"
+      }
+    },
+    {
+      "aliases": [
+        "Nano Banana 2 Lite",
+        "NanoBanana2Lite"
+      ],
+      "aspect_ratio_field": "aspect_ratio",
+      "display_name": "Google - Nano Banana 2 Lite",
+      "id": "nano-banana-2-lite",
+      "kind": "image",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "url_binding": {
+        "field": "image_urls",
+        "max_items": 10,
+        "type": "array"
+      }
+    },
+    {
+      "aspect_ratio_field": "aspect_ratio",
+      "display_name": "Flux-2 - Pro Image to Image",
+      "id": "flux-2/pro-image-to-image",
+      "kind": "image",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "resolution_field": "resolution",
+      "url_binding": {
+        "field": "input_urls",
+        "max_items": 8,
+        "type": "array"
+      }
+    },
+    {
+      "aspect_ratio_field": "aspect_ratio",
+      "display_name": "Flux-2 - Pro Text to Image",
+      "id": "flux-2/pro-text-to-image",
+      "kind": "image",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "resolution_field": "resolution",
+      "url_binding": {
+        "type": "none"
+      }
+    },
+    {
+      "aspect_ratio_field": "aspect_ratio",
+      "display_name": "Flux-2 - Image to Image",
+      "id": "flux-2/flex-image-to-image",
+      "kind": "image",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "resolution_field": "resolution",
+      "url_binding": {
+        "field": "input_urls",
+        "max_items": 8,
+        "type": "array"
+      }
+    },
+    {
+      "aspect_ratio_field": "aspect_ratio",
+      "display_name": "Flux-2 - Text to Image",
+      "id": "flux-2/flex-text-to-image",
+      "kind": "image",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "resolution_field": "resolution",
+      "url_binding": {
+        "type": "none"
+      }
+    },
+    {
+      "aspect_ratio_field": "aspect_ratio",
+      "display_name": "Grok Imagine - Text to Image",
+      "id": "grok-imagine/text-to-image",
+      "kind": "image",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "url_binding": {
+        "type": "none"
+      }
+    },
+    {
+      "display_name": "Grok Imagine - image to image",
+      "id": "grok-imagine/image-to-image",
+      "kind": "image",
+      "output_format": "none",
+      "prompt_policy": "optional",
+      "url_binding": {
+        "field": "image_urls",
+        "max_items": 5,
+        "type": "array"
+      }
+    },
+    {
+      "aspect_ratio_field": "aspect_ratio",
+      "display_name": "GPT Image-1.5 - Text to Image",
+      "id": "gpt-image/1.5-text-to-image",
+      "kind": "image",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "resolution_field": "quality",
+      "url_binding": {
+        "type": "none"
+      }
+    },
+    {
+      "aspect_ratio_field": "aspect_ratio",
+      "display_name": "GPT Image-1.5 - Image to Image",
+      "id": "gpt-image/1.5-image-to-image",
+      "kind": "image",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "resolution_field": "quality",
+      "url_binding": {
+        "field": "input_urls",
+        "max_items": 16,
+        "type": "array"
+      }
+    },
+    {
+      "aliases": [
+        "GPT Image 2 Text To Image"
+      ],
+      "aspect_ratio_field": "aspect_ratio",
+      "display_name": "GPT Image-2 - Text to Image",
+      "id": "gpt-image-2-text-to-image",
+      "kind": "image",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "resolution_field": "resolution",
+      "url_binding": {
+        "type": "none"
+      }
+    },
+    {
+      "aliases": [
+        "GPT Image 2 Image To Image"
+      ],
+      "aspect_ratio_field": "aspect_ratio",
+      "display_name": "GPT Image 2 - Image To Image",
+      "id": "gpt-image-2-image-to-image",
+      "kind": "image",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "resolution_field": "resolution",
+      "url_binding": {
+        "field": "input_urls",
+        "max_items": 16,
+        "type": "array"
+      }
+    },
+    {
+      "display_name": "Topaz - Image Upscale",
+      "id": "topaz/image-upscale",
+      "kind": "image",
+      "output_format": "none",
+      "prompt_policy": "none",
+      "url_binding": {
+        "field": "image_url",
+        "type": "scalar"
+      }
+    },
+    {
+      "display_name": "Recraft - Remove Background",
+      "id": "recraft/remove-background",
+      "kind": "image",
+      "output_format": "none",
+      "prompt_policy": "none",
+      "url_binding": {
+        "field": "image",
+        "type": "scalar"
+      }
+    },
+    {
+      "display_name": "Recraft - Crisp Upscale",
+      "id": "recraft/crisp-upscale",
+      "kind": "image",
+      "output_format": "none",
+      "prompt_policy": "none",
+      "url_binding": {
+        "field": "image",
+        "type": "scalar"
+      }
+    },
+    {
+      "display_name": "Ideogram - Character Edit",
+      "id": "ideogram/character-edit",
+      "kind": "image",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "url_binding": {
+        "type": "none"
+      }
+    },
+    {
+      "display_name": "Ideogram - Character Remix",
+      "id": "ideogram/character-remix",
+      "kind": "image",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "url_binding": {
+        "type": "none"
+      }
+    },
+    {
+      "display_name": "Ideogram - Character",
+      "id": "ideogram/character",
+      "kind": "image",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "url_binding": {
+        "field": "reference_image_urls",
+        "max_items": 1,
+        "type": "array"
+      }
+    },
+    {
+      "display_name": "Ideogram V3 Text to Image",
+      "id": "ideogram/v3-text-to-image",
+      "kind": "image",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "url_binding": {
+        "type": "none"
+      }
+    },
+    {
+      "display_name": "Ideogram V3 Edit",
+      "id": "ideogram/v3-edit",
+      "kind": "image",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "url_binding": {
+        "field": "image_url",
+        "type": "scalar"
+      }
+    },
+    {
+      "display_name": "Ideogram V3 Remix",
+      "id": "ideogram/v3-remix",
+      "kind": "image",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "url_binding": {
+        "field": "image_url",
+        "type": "scalar"
+      }
+    },
+    {
+      "display_name": "Qwen - Text to Image",
+      "id": "qwen/text-to-image",
+      "kind": "image",
+      "output_format": "jpeg_png",
+      "prompt_policy": "required",
+      "url_binding": {
+        "type": "none"
+      }
+    },
+    {
+      "display_name": "Qwen - Image to Image",
+      "id": "qwen/image-to-image",
+      "kind": "image",
+      "output_format": "jpeg_png",
+      "prompt_policy": "required",
+      "url_binding": {
+        "field": "image_url",
+        "type": "scalar"
+      }
+    },
+    {
+      "display_name": "Qwen - Image Edit",
+      "id": "qwen/image-edit",
+      "kind": "image",
+      "output_format": "jpeg_png",
+      "prompt_policy": "required",
+      "url_binding": {
+        "field": "image_url",
+        "type": "scalar"
+      }
+    },
+    {
+      "aspect_ratio_field": "image_size",
+      "display_name": "Qwen2 - Image Edit",
+      "id": "qwen2/image-edit",
+      "kind": "image",
+      "output_format": "jpeg_png",
+      "prompt_policy": "required",
+      "url_binding": {
+        "field": "image_url",
+        "type": "scalar"
+      }
+    },
+    {
+      "aspect_ratio_field": "image_size",
+      "display_name": "Qwen2 - Text To Image",
+      "id": "qwen2/text-to-image",
+      "kind": "image",
+      "output_format": "jpeg_png",
+      "prompt_policy": "required",
+      "url_binding": {
+        "type": "none"
+      }
+    },
+    {
+      "aspect_ratio_field": "aspect_ratio",
+      "display_name": "Wan 2.7 Image",
+      "id": "wan/2-7-image",
+      "kind": "image",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "resolution_field": "resolution",
+      "url_binding": {
+        "field": "input_urls",
+        "max_items": 9,
+        "type": "array"
+      }
+    },
+    {
+      "aspect_ratio_field": "aspect_ratio",
+      "display_name": "Wan 2.7 Image Pro",
+      "id": "wan/2-7-image-pro",
+      "kind": "image",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "resolution_field": "resolution",
+      "url_binding": {
+        "field": "input_urls",
+        "max_items": 9,
+        "type": "array"
+      }
+    },
+    {
+      "aspect_ratio_field": "aspect_ratio",
+      "display_name": "Grok Imagine Text to Video",
+      "id": "grok-imagine/text-to-video",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "resolution_field": "resolution",
+      "url_binding": {
+        "type": "none"
+      }
+    },
+    {
+      "aspect_ratio_field": "aspect_ratio",
+      "display_name": "Grok Imagine Image to Video",
+      "id": "grok-imagine/image-to-video",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "optional",
+      "resolution_field": "resolution",
+      "url_binding": {
+        "field": "image_urls",
+        "max_items": 7,
+        "type": "array"
+      }
+    },
+    {
+      "display_name": "Grok Imagine - Video Upscale",
+      "id": "grok-imagine/upscale",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "none",
+      "url_binding": {
+        "type": "none"
+      }
+    },
+    {
+      "display_name": "Grok Imagine - Video Extend",
+      "id": "grok-imagine/extend",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "url_binding": {
+        "type": "none"
+      }
+    },
+    {
+      "aspect_ratio_field": "aspect_ratio",
+      "display_name": "Grok Imagine Video 1.5 Preview",
+      "id": "grok-imagine-video-1-5-preview",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "optional",
+      "resolution_field": "resolution",
+      "url_binding": {
+        "field": "image_urls",
+        "max_items": 7,
+        "type": "array"
+      }
+    },
+    {
+      "aspect_ratio_field": "aspect_ratio",
+      "display_name": "Kling 2.6 Text to Video",
+      "id": "kling-2.6/text-to-video",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "url_binding": {
+        "type": "none"
+      }
+    },
+    {
+      "display_name": "Kling 2.6 Image to Video",
+      "id": "kling-2.6/image-to-video",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "url_binding": {
+        "field": "image_urls",
+        "max_items": 1,
+        "type": "array"
+      }
+    },
+    {
+      "display_name": "Kling V2.1 Master Image to Video",
+      "id": "kling/v2-1-master-image-to-video",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "url_binding": {
+        "field": "image_url",
+        "type": "scalar"
+      }
+    },
+    {
+      "display_name": "Kling - V2.5 Turbo Image to Video Pro",
+      "id": "kling/v2-5-turbo-image-to-video-pro",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "url_binding": {
+        "first_field": "image_url",
+        "last_field": "tail_image_url",
+        "type": "first_last_frame"
+      }
+    },
+    {
+      "aspect_ratio_field": "aspect_ratio",
+      "display_name": "Kling - V2.5 Turbo Text to Video Pro",
+      "id": "kling/v2-5-turbo-text-to-video-pro",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "url_binding": {
+        "type": "none"
+      }
+    },
+    {
+      "display_name": "Kling AI Avatar Standard",
+      "id": "kling/ai-avatar-standard",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "url_binding": {
+        "type": "none"
+      }
+    },
+    {
+      "display_name": "Kling AI Avatar Pro",
+      "id": "kling/ai-avatar-pro",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "url_binding": {
+        "type": "none"
+      }
+    },
+    {
+      "aspect_ratio_field": "aspect_ratio",
+      "display_name": "Kling V2.1 Master Text to Video",
+      "id": "kling/v2-1-master-text-to-video",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "url_binding": {
+        "type": "none"
+      }
+    },
+    {
+      "display_name": "Kling V2.1 Pro",
+      "id": "kling/v2-1-pro",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "url_binding": {
+        "first_field": "image_url",
+        "last_field": "tail_image_url",
+        "type": "first_last_frame"
+      }
+    },
+    {
+      "display_name": "Kling V2.1 Standard",
+      "id": "kling/v2-1-standard",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "url_binding": {
+        "field": "image_url",
+        "type": "scalar"
+      }
+    },
+    {
+      "display_name": "Kling 2.6 motion-control",
+      "id": "kling-2.6/motion-control",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "optional",
+      "url_binding": {
+        "type": "none"
+      }
+    },
+    {
+      "display_name": "Kling-3.0 motion-control",
+      "id": "kling-3.0/motion-control",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "optional",
+      "url_binding": {
+        "type": "none"
+      }
+    },
+    {
+      "aspect_ratio_field": "aspect_ratio",
+      "display_name": "Kling 3.0",
+      "id": "kling-3.0/video",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "url_binding": {
+        "field": "image_urls",
+        "max_items": 2,
+        "type": "array"
+      }
+    },
+    {
+      "aspect_ratio_field": "aspect_ratio",
+      "display_name": "Kling - V3 Turbo Text to Video",
+      "id": "kling/v3-turbo-text-to-video",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "resolution_field": "resolution",
+      "url_binding": {
+        "type": "none"
+      }
+    },
+    {
+      "display_name": "Kling - V3 Turbo Image to Video",
+      "id": "kling/v3-turbo-image-to-video",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "resolution_field": "resolution",
+      "url_binding": {
+        "field": "image_urls",
+        "max_items": 1,
+        "type": "array"
+      }
+    },
+    {
+      "aspect_ratio_field": "aspect_ratio",
+      "display_name": "bytedance-seedance-2",
+      "id": "bytedance/seedance-2",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "resolution_field": "resolution",
+      "url_binding": {
+        "first_field": "first_frame_url",
+        "last_field": "last_frame_url",
+        "type": "first_last_frame"
+      }
+    },
+    {
+      "aspect_ratio_field": "aspect_ratio",
+      "display_name": "Bytedance Seedance 2.0 Fast",
+      "id": "bytedance/seedance-2-fast",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "resolution_field": "resolution",
+      "url_binding": {
+        "first_field": "first_frame_url",
+        "last_field": "last_frame_url",
+        "type": "first_last_frame"
+      }
+    },
+    {
+      "aspect_ratio_field": "aspect_ratio",
+      "display_name": "Bytedance Seedance 2.0 Mini",
+      "id": "bytedance/seedance-2-mini",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "resolution_field": "resolution",
+      "url_binding": {
+        "first_field": "first_frame_url",
+        "last_field": "last_frame_url",
+        "type": "first_last_frame"
+      }
+    },
+    {
+      "aspect_ratio_field": "aspect_ratio",
+      "display_name": "Bytedance Seedance 1.5 Pro",
+      "id": "bytedance/seedance-1.5-pro",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "resolution_field": "resolution",
+      "url_binding": {
+        "field": "input_urls",
+        "max_items": 2,
+        "type": "array"
+      }
+    },
+    {
+      "display_name": "Bytedance V1 Pro Fast Image to Video",
+      "id": "bytedance/v1-pro-fast-image-to-video",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "resolution_field": "resolution",
+      "url_binding": {
+        "field": "image_url",
+        "type": "scalar"
+      }
+    },
+    {
+      "display_name": "Bytedance V1 Pro Image to Video",
+      "id": "bytedance/v1-pro-image-to-video",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "resolution_field": "resolution",
+      "url_binding": {
+        "field": "image_url",
+        "type": "scalar"
+      }
+    },
+    {
+      "aspect_ratio_field": "aspect_ratio",
+      "display_name": "Bytedance - V1 Pro Text to Video",
+      "id": "bytedance/v1-pro-text-to-video",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "resolution_field": "resolution",
+      "url_binding": {
+        "type": "none"
+      }
+    },
+    {
+      "display_name": "Bytedance - V1 Lite Image to Video",
+      "id": "bytedance/v1-lite-image-to-video",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "resolution_field": "resolution",
+      "url_binding": {
+        "first_field": "image_url",
+        "last_field": "end_image_url",
+        "type": "first_last_frame"
+      }
+    },
+    {
+      "aspect_ratio_field": "aspect_ratio",
+      "display_name": "Bytedance - V1 Lite Text to Video",
+      "id": "bytedance/v1-lite-text-to-video",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "resolution_field": "resolution",
+      "url_binding": {
+        "type": "none"
+      }
+    },
+    {
+      "display_name": "Hailuo 2.3 Pro Image to Video",
+      "id": "hailuo/2-3-image-to-video-pro",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "resolution_field": "resolution",
+      "url_binding": {
+        "field": "image_url",
+        "type": "scalar"
+      }
+    },
+    {
+      "display_name": "Hailuo 2.3 Standard Image to Video",
+      "id": "hailuo/2-3-image-to-video-standard",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "resolution_field": "resolution",
+      "url_binding": {
+        "field": "image_url",
+        "type": "scalar"
+      }
+    },
+    {
+      "display_name": "Hailuo Pro Text to Video",
+      "id": "hailuo/02-text-to-video-pro",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "url_binding": {
+        "type": "none"
+      }
+    },
+    {
+      "display_name": "Hailuo Pro Image to Video",
+      "id": "hailuo/02-image-to-video-pro",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "url_binding": {
+        "first_field": "image_url",
+        "last_field": "end_image_url",
+        "type": "first_last_frame"
+      }
+    },
+    {
+      "display_name": "Hailuo Standard Text to Video",
+      "id": "hailuo/02-text-to-video-standard",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "url_binding": {
+        "type": "none"
+      }
+    },
+    {
+      "display_name": "Hailuo Standard Image to Video",
+      "id": "hailuo/02-image-to-video-standard",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "resolution_field": "resolution",
+      "url_binding": {
+        "first_field": "image_url",
+        "last_field": "end_image_url",
+        "type": "first_last_frame"
+      }
+    },
+    {
+      "display_name": "Wan - Image to Video",
+      "id": "wan/2-2-a14b-image-to-video-turbo",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "resolution_field": "resolution",
+      "url_binding": {
+        "field": "image_url",
+        "type": "scalar"
+      }
+    },
+    {
+      "display_name": "Wan - 2.2 A14B Speech to Video Turbo",
+      "id": "wan/2-2-a14b-speech-to-video-turbo",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "resolution_field": "resolution",
+      "url_binding": {
+        "type": "none"
+      }
+    },
+    {
+      "aspect_ratio_field": "aspect_ratio",
+      "display_name": "Wan - Text to Video",
+      "id": "wan/2-2-a14b-text-to-video-turbo",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "resolution_field": "resolution",
+      "url_binding": {
+        "type": "none"
+      }
+    },
+    {
+      "display_name": "Wan - Animate Move",
+      "id": "wan/2-2-animate-move",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "none",
+      "resolution_field": "resolution",
+      "url_binding": {
+        "type": "none"
+      }
+    },
+    {
+      "display_name": "Wan - Animate Replace",
+      "id": "wan/2-2-animate-replace",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "none",
+      "resolution_field": "resolution",
+      "url_binding": {
+        "type": "none"
+      }
+    },
+    {
+      "display_name": "Wan 2.6 - Image to Video",
+      "id": "wan/2-6-image-to-video",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "resolution_field": "resolution",
+      "url_binding": {
+        "field": "image_urls",
+        "max_items": 1,
+        "type": "array"
+      }
+    },
+    {
+      "display_name": "Wan 2.6 - Text to Video",
+      "id": "wan/2-6-text-to-video",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "resolution_field": "resolution",
+      "url_binding": {
+        "type": "none"
+      }
+    },
+    {
+      "display_name": "Wan 2.6 - Video to Video",
+      "id": "wan/2-6-video-to-video",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "resolution_field": "resolution",
+      "url_binding": {
+        "field": "video_urls",
+        "max_items": 3,
+        "type": "array"
+      }
+    },
+    {
+      "display_name": "Wan - 2.6-flash-image-to-video",
+      "id": "wan/2-6-flash-image-to-video",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "resolution_field": "resolution",
+      "url_binding": {
+        "field": "image_urls",
+        "max_items": 1,
+        "type": "array"
+      }
+    },
+    {
+      "display_name": "Wan - 2-6-flash-video-to-video",
+      "id": "wan/2-6-flash-video-to-video",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "resolution_field": "resolution",
+      "url_binding": {
+        "field": "video_urls",
+        "max_items": 3,
+        "type": "array"
+      }
+    },
+    {
+      "display_name": "Wan 2.5 - Image to Video",
+      "id": "wan/2-5-image-to-video",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "resolution_field": "resolution",
+      "url_binding": {
+        "field": "image_url",
+        "type": "scalar"
+      }
+    },
+    {
+      "aspect_ratio_field": "aspect_ratio",
+      "display_name": "Wan 2.5 - Text to Video",
+      "id": "wan/2-5-text-to-video",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "resolution_field": "resolution",
+      "url_binding": {
+        "type": "none"
+      }
+    },
+    {
+      "aspect_ratio_field": "ratio",
+      "display_name": "Wan 2.7 - Text to Video",
+      "id": "wan/2-7-text-to-video",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "resolution_field": "resolution",
+      "url_binding": {
+        "type": "none"
+      }
+    },
+    {
+      "display_name": "Wan 2.7 - Image to Video",
+      "id": "wan/2-7-image-to-video",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "resolution_field": "resolution",
+      "url_binding": {
+        "first_field": "first_frame_url",
+        "last_field": "last_frame_url",
+        "type": "first_last_frame"
+      }
+    },
+    {
+      "aspect_ratio_field": "aspect_ratio",
+      "display_name": "Wan 2.7 - Video Edit",
+      "id": "wan/2-7-videoedit",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "optional",
+      "resolution_field": "resolution",
+      "url_binding": {
+        "field": "video_url",
+        "type": "scalar"
+      }
+    },
+    {
+      "aspect_ratio_field": "aspect_ratio",
+      "display_name": "Wan 2.7 - Reference to Video",
+      "id": "wan/2-7-r2v",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "resolution_field": "resolution",
+      "url_binding": {
+        "type": "none"
+      }
+    },
+    {
+      "display_name": "Topaz - Video Upscale",
+      "id": "topaz/video-upscale",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "none",
+      "url_binding": {
+        "field": "video_url",
+        "type": "scalar"
+      }
+    },
+    {
+      "display_name": "Infinitalk - From Audio",
+      "id": "infinitalk/from-audio",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "resolution_field": "resolution",
+      "url_binding": {
+        "type": "none"
+      }
+    },
+    {
+      "aspect_ratio_field": "aspect_ratio",
+      "display_name": "PixVerse V6 Text-to-Video",
+      "id": "pixverse-v6/text-to-video",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "resolution_field": "quality",
+      "url_binding": {
+        "type": "none"
+      }
+    },
+    {
+      "display_name": "PixVerse V6 Image-to-Video",
+      "id": "pixverse-v6/image-to-video",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "resolution_field": "quality",
+      "url_binding": {
+        "field": "image_urls",
+        "max_items": 2,
+        "type": "array"
+      }
+    },
+    {
+      "display_name": "PixVerse V6 First & Last Frame Transition",
+      "id": "pixverse-v6/transition",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "resolution_field": "quality",
+      "url_binding": {
+        "first_field": "first_frame_image_url",
+        "last_field": "last_frame_image_url",
+        "type": "first_last_frame"
+      }
+    },
+    {
+      "display_name": "PixVerse V6 Video Extension",
+      "id": "pixverse-v6/extend",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "resolution_field": "quality",
+      "url_binding": {
+        "field": "video_url",
+        "type": "scalar"
+      }
+    },
+    {
+      "aspect_ratio_field": "aspect_ratio",
+      "display_name": "PixVerse V6 Fusion / Reference-to-Video",
+      "id": "pixverse-v6/reference-to-video",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "resolution_field": "quality",
+      "url_binding": {
+        "type": "none"
+      }
+    },
+    {
+      "aspect_ratio_field": "aspect_ratio",
+      "display_name": "happyhorse-text-to-video",
+      "id": "happyhorse/text-to-video",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "resolution_field": "resolution",
+      "url_binding": {
+        "type": "none"
+      }
+    },
+    {
+      "display_name": "happyhorse-image-to-video",
+      "id": "happyhorse/image-to-video",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "optional",
+      "resolution_field": "resolution",
+      "url_binding": {
+        "field": "image_urls",
+        "max_items": 1,
+        "type": "array"
+      }
+    },
+    {
+      "aspect_ratio_field": "aspect_ratio",
+      "display_name": "happyhorse/reference-to-video",
+      "id": "happyhorse/reference-to-video",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "resolution_field": "resolution",
+      "url_binding": {
+        "field": "reference_image",
+        "max_items": 9,
+        "type": "array"
+      }
+    },
+    {
+      "display_name": "happyhorse/video-edit",
+      "id": "happyhorse/video-edit",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "resolution_field": "resolution",
+      "url_binding": {
+        "field": "video_url",
+        "type": "scalar"
+      }
+    },
+    {
+      "display_name": "HappyHorse-1-1 image-to-video",
+      "id": "happyhorse-1-1/image-to-video",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "optional",
+      "resolution_field": "resolution",
+      "url_binding": {
+        "field": "image_urls",
+        "max_items": 1,
+        "type": "array"
+      }
+    },
+    {
+      "aspect_ratio_field": "aspect_ratio",
+      "display_name": "HappyHorse-1-1 text-to-video",
+      "id": "happyhorse-1-1/text-to-video",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "resolution_field": "resolution",
+      "url_binding": {
+        "type": "none"
+      }
+    },
+    {
+      "aspect_ratio_field": "aspect_ratio",
+      "display_name": "HappyHorse-1-1 reference-to-video",
+      "id": "happyhorse-1-1/reference-to-video",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "resolution_field": "resolution",
+      "url_binding": {
+        "field": "reference_image",
+        "max_items": 9,
+        "type": "array"
+      }
+    },
+    {
+      "aspect_ratio_field": "aspect_ratio",
+      "display_name": "Gemini Omni Video",
+      "id": "gemini-omni-video",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "resolution_field": "resolution",
+      "url_binding": {
+        "field": "image_urls",
+        "max_items": 7,
+        "type": "array"
+      }
+    },
+    {
+      "display_name": "Omnihuman 1.5",
+      "id": "omnihuman-1-5",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "optional",
+      "resolution_field": "output_resolution",
+      "url_binding": {
+        "type": "none"
+      }
+    },
+    {
+      "display_name": "Volcengine video to video lip sync",
+      "id": "volcengine/video-to-video-lip-sync",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "none",
+      "url_binding": {
+        "type": "none"
+      }
+    }
+  ]
+}
