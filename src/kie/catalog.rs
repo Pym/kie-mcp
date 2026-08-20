@@ -252,6 +252,7 @@ const RATIO: Option<&str> = Some("ratio");
 const RES: Option<&str> = Some("resolution");
 const IMG_RES: Option<&str> = Some("image_resolution");
 const IMAGE_SIZE: Option<&str> = Some("image_size");
+const SIZE: Option<&str> = Some("size");
 const OUT_RES: Option<&str> = Some("output_resolution");
 const QUALITY: Option<&str> = Some("quality");
 const OF_NONE: OutputFormatStyle = OutputFormatStyle::None;
@@ -324,12 +325,13 @@ mod tests {
 
     #[test]
     fn compact_catalog_covers_market_image_video_models() {
-        assert_eq!(model_catalog().len(), 112);
-        assert!(
-            model_catalog()
-                .iter()
-                .all(|model| !model.id.contains("subject-detection"))
-        );
+        assert_eq!(model_catalog().len(), 127);
+        assert!(model_catalog().iter().all(|model| !matches!(
+            model.id,
+            "grok-imagine-image-2-0/segment-map"
+                | "omnihuman-1-5/human-identification"
+                | "omnihuman-1-5/subject-detection"
+        )));
     }
 
     #[test]
@@ -375,16 +377,24 @@ mod tests {
     #[test]
     fn latest_market_image_video_models_are_cataloged() {
         let expected = [
-            ("seedream/5-pro-text-to-image", GenerationKind::Image),
-            ("seedream/5-pro-image-to-image", GenerationKind::Image),
-            ("qwen2/text-to-image", GenerationKind::Image),
-            ("kling/v2-5-turbo-image-to-video-pro", GenerationKind::Video),
-            ("bytedance/seedance-2-mini", GenerationKind::Video),
-            ("pixverse-v6/text-to-video", GenerationKind::Video),
-            ("pixverse-v6/image-to-video", GenerationKind::Video),
-            ("pixverse-v6/transition", GenerationKind::Video),
-            ("pixverse-v6/extend", GenerationKind::Video),
-            ("pixverse-v6/reference-to-video", GenerationKind::Video),
+            ("seedream/5-pro-layer-decomposition", GenerationKind::Image),
+            (
+                "grok-imagine-image-2-0/text-to-image",
+                GenerationKind::Image,
+            ),
+            ("grok-imagine-image-2-0/image-edit", GenerationKind::Image),
+            ("qwen3/pro-text-to-image", GenerationKind::Image),
+            ("qwen3/text-to-image", GenerationKind::Image),
+            ("qwen3/pro-image-to-image", GenerationKind::Image),
+            ("qwen3/image-to-image", GenerationKind::Image),
+            ("kling-3.0-omni/reference-to-video", GenerationKind::Video),
+            ("kling-3.0-omni/transformation", GenerationKind::Video),
+            ("kling-3.0-omni/image-to-video", GenerationKind::Video),
+            ("kling-3.0-omni/text-to-video", GenerationKind::Video),
+            ("bytedance/seedance-2-5", GenerationKind::Video),
+            ("minimax-h3/text-to-video", GenerationKind::Video),
+            ("minimax-h3/image-to-video", GenerationKind::Video),
+            ("minimax-h3/reference-to-video", GenerationKind::Video),
         ];
 
         for (id, kind) in expected {
@@ -432,6 +442,76 @@ mod tests {
         let qwen = resolve_model("qwen2/text-to-image", GenerationKind::Image).unwrap();
         assert_eq!(qwen.aspect_ratio_field, Some("image_size"));
         assert_eq!(qwen.output_format, OutputFormatStyle::Jpeg);
+
+        let layers =
+            resolve_model("seedream/5-pro-layer-decomposition", GenerationKind::Image).unwrap();
+        assert_eq!(
+            layers.url_binding,
+            UrlBinding::Scalar { field: "image_url" }
+        );
+        assert_eq!(layers.resolution_field, Some("size"));
+        assert_eq!(layers.output_format, OutputFormatStyle::Jpeg);
+
+        for id in ["qwen3/pro-image-to-image", "qwen3/image-to-image"] {
+            let model = resolve_model(id, GenerationKind::Image).unwrap();
+            assert_eq!(
+                model.url_binding,
+                UrlBinding::Array {
+                    field: "image_urls",
+                    max_items: Some(3),
+                },
+                "{id}"
+            );
+            assert_eq!(model.aspect_ratio_field, Some("image_size"), "{id}");
+            assert_eq!(model.resolution_field, Some("resolution"), "{id}");
+            assert_eq!(model.output_format, OutputFormatStyle::Jpeg, "{id}");
+        }
+    }
+
+    #[test]
+    fn latest_video_profiles_map_documented_media_fields() {
+        let kling = resolve_model("kling-3.0-omni/image-to-video", GenerationKind::Video).unwrap();
+        assert_eq!(
+            kling.url_binding,
+            UrlBinding::Array {
+                field: "image_urls",
+                max_items: Some(2),
+            }
+        );
+        assert_eq!(kling.aspect_ratio_field, Some("aspect_ratio"));
+        assert_eq!(kling.resolution_field, Some("resolution"));
+
+        for id in ["bytedance/seedance-2-5", "minimax-h3/image-to-video"] {
+            let model = resolve_model(id, GenerationKind::Video).unwrap();
+            assert_eq!(
+                model.url_binding,
+                UrlBinding::FirstLastFrame {
+                    first_field: "first_frame_url",
+                    last_field: "last_frame_url",
+                },
+                "{id}"
+            );
+        }
+
+        for id in [
+            "kling-3.0-omni/reference-to-video",
+            "kling-3.0-omni/transformation",
+            "minimax-h3/reference-to-video",
+        ] {
+            let model = resolve_model(id, GenerationKind::Video).unwrap();
+            assert_eq!(model.url_binding, UrlBinding::None, "{id}");
+        }
+    }
+
+    #[test]
+    fn previous_wan_display_names_remain_aliases() {
+        let image = resolve_model("Wan - Image to Video", GenerationKind::Video).unwrap();
+        assert_eq!(image.id, "wan/2-2-a14b-image-to-video-turbo");
+        assert_eq!(image.display_name, "Wan - 2.2 A14B Image to Video Turbo");
+
+        let text = resolve_model("Wan - Text to Video", GenerationKind::Video).unwrap();
+        assert_eq!(text.id, "wan/2-2-a14b-text-to-video-turbo");
+        assert_eq!(text.display_name, "Wan - 2.2 A14B Text to Video Turbo");
     }
 
     #[test]
@@ -522,11 +602,13 @@ mod tests {
         assert_eq!(
             optional,
             vec![
+                "seedream/5-pro-layer-decomposition",
                 "grok-imagine/image-to-image",
                 "grok-imagine/image-to-video",
                 "grok-imagine-video-1-5-preview",
                 "kling-2.6/motion-control",
                 "kling-3.0/motion-control",
+                "bytedance/seedance-2-5",
                 "wan/2-7-videoedit",
                 "happyhorse/image-to-video",
                 "happyhorse-1-1/image-to-video",
@@ -558,7 +640,7 @@ mod tests {
                 .iter()
                 .filter(|model| model.prompt_policy == PromptPolicy::Required)
                 .count(),
-            95
+            108
         );
     }
 

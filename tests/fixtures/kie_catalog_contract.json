@@ -1,7 +1,7 @@
 {
   "source": "https://docs.kie.ai/llms.txt",
-  "verified_at": "2026-07-22",
-  "llms_sha256": "a943c9a51df2cef8fe980af1f6e0216e4da9d85a9eb6d6308c73052c1d8f8000",
+  "verified_at": "2026-08-20",
+  "llms_sha256": "43e0b581b8289c0498d44f31fa8740bd44f9d77eb28394840388a73247c2d911",
   "models": [
     {
       "display_name": "Seedream3.0 - Text to Image",
@@ -113,6 +113,18 @@
         "field": "image_urls",
         "max_items": 10,
         "type": "array"
+      }
+    },
+    {
+      "display_name": "Seedream 5.0 Pro - Layer Decomposition",
+      "id": "seedream/5-pro-layer-decomposition",
+      "kind": "image",
+      "output_format": "jpeg_png",
+      "prompt_policy": "optional",
+      "resolution_field": "size",
+      "url_binding": {
+        "field": "image_url",
+        "type": "scalar"
       }
     },
     {
@@ -315,6 +327,27 @@
         "field": "image_urls",
         "max_items": 5,
         "type": "array"
+      }
+    },
+    {
+      "aspect_ratio_field": "aspect_ratio",
+      "display_name": "Grok Imagine Image 2.0 Text To Image",
+      "id": "grok-imagine-image-2-0/text-to-image",
+      "kind": "image",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "url_binding": {
+        "type": "none"
+      }
+    },
+    {
+      "display_name": "Grok Imagine Image 2.0 Image Edit",
+      "id": "grok-imagine-image-2-0/image-edit",
+      "kind": "image",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "url_binding": {
+        "type": "none"
       }
     },
     {
@@ -525,6 +558,58 @@
       "prompt_policy": "required",
       "url_binding": {
         "type": "none"
+      }
+    },
+    {
+      "aspect_ratio_field": "image_size",
+      "display_name": "Qwen3 Pro Text to Image",
+      "id": "qwen3/pro-text-to-image",
+      "kind": "image",
+      "output_format": "jpeg_png",
+      "prompt_policy": "required",
+      "resolution_field": "resolution",
+      "url_binding": {
+        "type": "none"
+      }
+    },
+    {
+      "aspect_ratio_field": "image_size",
+      "display_name": "Qwen3 Text to Image",
+      "id": "qwen3/text-to-image",
+      "kind": "image",
+      "output_format": "jpeg_png",
+      "prompt_policy": "required",
+      "resolution_field": "resolution",
+      "url_binding": {
+        "type": "none"
+      }
+    },
+    {
+      "aspect_ratio_field": "image_size",
+      "display_name": "Qwen3 Pro Image to Image",
+      "id": "qwen3/pro-image-to-image",
+      "kind": "image",
+      "output_format": "jpeg_png",
+      "prompt_policy": "required",
+      "resolution_field": "resolution",
+      "url_binding": {
+        "field": "image_urls",
+        "max_items": 3,
+        "type": "array"
+      }
+    },
+    {
+      "aspect_ratio_field": "image_size",
+      "display_name": "Qwen3 Image to Image",
+      "id": "qwen3/image-to-image",
+      "kind": "image",
+      "output_format": "jpeg_png",
+      "prompt_policy": "required",
+      "resolution_field": "resolution",
+      "url_binding": {
+        "field": "image_urls",
+        "max_items": 3,
+        "type": "array"
       }
     },
     {
@@ -786,6 +871,56 @@
     },
     {
       "aspect_ratio_field": "aspect_ratio",
+      "display_name": "Kling 3.0 Omni Reference To Video",
+      "id": "kling-3.0-omni/reference-to-video",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "resolution_field": "resolution",
+      "url_binding": {
+        "type": "none"
+      }
+    },
+    {
+      "aspect_ratio_field": "aspect_ratio",
+      "display_name": "Kling 3.0 Omni Transformation",
+      "id": "kling-3.0-omni/transformation",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "resolution_field": "resolution",
+      "url_binding": {
+        "type": "none"
+      }
+    },
+    {
+      "aspect_ratio_field": "aspect_ratio",
+      "display_name": "Kling 3.0 Omni Image To Video",
+      "id": "kling-3.0-omni/image-to-video",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "resolution_field": "resolution",
+      "url_binding": {
+        "field": "image_urls",
+        "max_items": 2,
+        "type": "array"
+      }
+    },
+    {
+      "aspect_ratio_field": "aspect_ratio",
+      "display_name": "Kling 3.0 Omni Text to Video",
+      "id": "kling-3.0-omni/text-to-video",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "resolution_field": "resolution",
+      "url_binding": {
+        "type": "none"
+      }
+    },
+    {
+      "aspect_ratio_field": "aspect_ratio",
       "display_name": "bytedance-seedance-2",
       "id": "bytedance/seedance-2",
       "kind": "video",
@@ -819,6 +954,20 @@
       "kind": "video",
       "output_format": "none",
       "prompt_policy": "required",
+      "resolution_field": "resolution",
+      "url_binding": {
+        "first_field": "first_frame_url",
+        "last_field": "last_frame_url",
+        "type": "first_last_frame"
+      }
+    },
+    {
+      "aspect_ratio_field": "aspect_ratio",
+      "display_name": "Bytedance Seedance 2.5",
+      "id": "bytedance/seedance-2-5",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "optional",
       "resolution_field": "resolution",
       "url_binding": {
         "first_field": "first_frame_url",
@@ -971,7 +1120,10 @@
       }
     },
     {
-      "display_name": "Wan - Image to Video",
+      "aliases": [
+        "Wan - Image to Video"
+      ],
+      "display_name": "Wan - 2.2 A14B Image to Video Turbo",
       "id": "wan/2-2-a14b-image-to-video-turbo",
       "kind": "video",
       "output_format": "none",
@@ -994,8 +1146,11 @@
       }
     },
     {
+      "aliases": [
+        "Wan - Text to Video"
+      ],
       "aspect_ratio_field": "aspect_ratio",
-      "display_name": "Wan - Text to Video",
+      "display_name": "Wan - 2.2 A14B Text to Video Turbo",
       "id": "wan/2-2-a14b-text-to-video-turbo",
       "kind": "video",
       "output_format": "none",
@@ -1244,6 +1399,43 @@
       "output_format": "none",
       "prompt_policy": "required",
       "resolution_field": "quality",
+      "url_binding": {
+        "type": "none"
+      }
+    },
+    {
+      "aspect_ratio_field": "aspect_ratio",
+      "display_name": "MiniMax H3 Text-to-Video",
+      "id": "minimax-h3/text-to-video",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "resolution_field": "resolution",
+      "url_binding": {
+        "type": "none"
+      }
+    },
+    {
+      "display_name": "MiniMax H3 Image-to-Video",
+      "id": "minimax-h3/image-to-video",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "resolution_field": "resolution",
+      "url_binding": {
+        "first_field": "first_frame_url",
+        "last_field": "last_frame_url",
+        "type": "first_last_frame"
+      }
+    },
+    {
+      "aspect_ratio_field": "aspect_ratio",
+      "display_name": "MiniMax H3 Reference-to-Video",
+      "id": "minimax-h3/reference-to-video",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "resolution_field": "resolution",
       "url_binding": {
         "type": "none"
       }
