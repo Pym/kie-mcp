@@ -6,8 +6,10 @@ able to install and operate the server from the main README alone.
 ## Scope
 
 `kie-mcp` wraps Kie Market image and video generation through the task API. It
-does not aim to cover chat, audio-only generation, webhooks, legacy endpoints,
-or every model-specific schema.
+also supports five preparation operations tied to Grok Image 2, Gemini Omni
+Video, and OmniHuman 1.5. Gemini's two profile endpoints are included only
+because their IDs feed video generation. The project does not cover chat,
+standalone audio generation, webhooks, legacy endpoints, or every model schema.
 
 The public MCP surface stays deliberately small:
 
@@ -15,7 +17,9 @@ The public MCP surface stays deliberately small:
 - common inputs are top-level tool fields;
 - uncommon model fields pass through the open `input` object;
 - local references are uploaded automatically;
-- completed media is downloaded before the tool returns.
+- completed media is downloaded before the tool returns;
+- structured preparation results use dedicated tools instead of pretending to
+  be generated media.
 
 Kie remains the source of truth for model-specific validation and pricing.
 
@@ -30,6 +34,7 @@ Kie remains the source of truth for model-specific validation and pricing.
 | `src/kie/jobs.rs` | Model checks and Kie request assembly. |
 | `src/kie/client.rs` | HTTP calls, uploads, polling, downloads, and error redaction. |
 | `src/kie/normalize.rs` | Extraction of result and poster URLs from Kie responses. |
+| `src/kie/operations.rs` | Typed Gemini profiles and structured Grok/OmniHuman results. |
 | `src/media.rs` | Local filenames, extensions, and Markdown previews. |
 
 A generation request follows this path:
@@ -40,6 +45,11 @@ A generation request follows this path:
 4. Create one Kie task and poll `recordInfo` until it finishes.
 5. Resolve and download result media into a task-specific directory.
 6. Return structured data plus local Markdown previews.
+
+The three asynchronous preparation operations share task creation and polling
+with generation, then parse `resultJson` into typed results. Segment and subject
+masks keep their remote URLs and receive best-effort local previews. The two
+Gemini Omni profile endpoints are synchronous and return reusable IDs.
 
 Do not split these modules further unless a boundary has independent behavior
 or repeated change pressure. File length alone is not a reason to add layers.
@@ -64,6 +74,11 @@ file. Preserve exact-key uniqueness and update
 test locks every catalog entry and compact request contract. Do not add full
 model schemas to the binary; uncommon fields belong in `input` and in Kie's own
 documentation.
+
+The catalog contains final image and video models only. Grok Segment Map and
+the two OmniHuman preparation models live in `operations.rs`, so a caller cannot
+accidentally send them through `kie_generate_image` or `kie_generate_video`.
+Gemini Omni Audio and Character use separate endpoints and are not model entries.
 
 ## Configuration reference
 
@@ -117,6 +132,9 @@ corrupt MCP stdio messages.
   result download size is not yet capped.
 - Result extraction supports common Kie fields and retains a generic fallback
   for model response shapes not represented by the catalog.
+- `kie_task_status` recognizes the three asynchronous preparation models. It
+  returns their typed result and downloads masks when `download_if_complete` is
+  true.
 - The local catalog can lag behind Kie's availability and capabilities. Raw
   model IDs are accepted only when their media kind can be inferred safely, and
   all model-specific fields must then be supplied directly in `input`. Top-level

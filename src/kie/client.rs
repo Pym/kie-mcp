@@ -21,9 +21,37 @@ use super::{
     jobs::{
         ApiEnvelope, CreateTaskData, CreateTaskResponse, CreditsResponse, GenerationKind,
         GenerationRequest, GenerationResult, TaskRecord, UploadedInput, create_task_payload,
-        has_explicit_media_input, validate_generation_request, validate_model,
+        has_explicit_media_input, validate_generation_request, validate_input_url, validate_model,
     },
     normalize::extract_media_urls,
+    operations::{
+        GeminiOmniAudioRequest, GeminiOmniAudioResult, GeminiOmniCharacterRequest,
+        GeminiOmniCharacterResult, GeminiOmniVoice, StructuredOperation, StructuredTaskOutput,
+        StructuredTaskResult, parse_structured_record,
+    },
+};
+
+const GEMINI_CHARACTER_MAX_IMAGE_BYTES: u64 = 20 * 1024 * 1024;
+const OMNIHUMAN_MAX_IMAGE_BYTES: u64 = 5 * 1024 * 1024;
+const JPEG_PNG_MIME_TYPES: &[&str] = &["image/jpeg", "image/png"];
+
+#[derive(Debug, Clone, Copy)]
+struct ImageUploadPolicy {
+    endpoint_max_bytes: Option<u64>,
+    allowed_mimes: Option<&'static [&'static str]>,
+}
+
+const DEFAULT_IMAGE_UPLOAD: ImageUploadPolicy = ImageUploadPolicy {
+    endpoint_max_bytes: None,
+    allowed_mimes: None,
+};
+const GEMINI_CHARACTER_IMAGE_UPLOAD: ImageUploadPolicy = ImageUploadPolicy {
+    endpoint_max_bytes: Some(GEMINI_CHARACTER_MAX_IMAGE_BYTES),
+    allowed_mimes: None,
+};
+const OMNIHUMAN_IMAGE_UPLOAD: ImageUploadPolicy = ImageUploadPolicy {
+    endpoint_max_bytes: Some(OMNIHUMAN_MAX_IMAGE_BYTES),
+    allowed_mimes: Some(JPEG_PNG_MIME_TYPES),
 };
 
 #[derive(Debug, Clone)]
@@ -75,6 +103,45 @@ impl KieClient {
 
     pub async fn upload_file(&self, path: &Path) -> Result<UploadedInput, KieError> {
         let local = self.local_upload(path).await?;
+        self.upload_local(local).await
+    }
+
+    async fn upload_image_file(
+        &self,
+        path: &Path,
+        policy: ImageUploadPolicy,
+    ) -> Result<UploadedInput, KieError> {
+        let local = self.local_upload(path).await?;
+        if !local.mime.starts_with("image/") {
+            return Err(KieError::InvalidLocalInput {
+                path: local.path.display().to_string(),
+                message: "path must be an image file".to_string(),
+            });
+        }
+        if let Some(allowed_mimes) = policy.allowed_mimes
+            && !allowed_mimes.contains(&local.mime.as_str())
+        {
+            return Err(KieError::InvalidLocalInput {
+                path: local.path.display().to_string(),
+                message: format!(
+                    "unsupported image type {}; expected JPEG or PNG",
+                    local.mime
+                ),
+            });
+        }
+        if let Some(limit) = policy.endpoint_max_bytes
+            && local.key.len > limit
+        {
+            return Err(KieError::LocalInputTooLarge {
+                path: local.path.display().to_string(),
+                size: local.key.len,
+                limit,
+            });
+        }
+        self.upload_local(local).await
+    }
+
+    async fn upload_local(&self, local: LocalUpload) -> Result<UploadedInput, KieError> {
         let key = local.key.clone();
         if let Ok(cache) = self.upload_cache.lock()
             && let Some(cached) = cache.get(&key)
@@ -239,6 +306,15 @@ impl KieClient {
         request: &GenerationRequest,
         kind: GenerationKind,
     ) -> Result<String, KieError> {
+        if let Some(operation) = StructuredOperation::from_model(&request.model) {
+            return Err(KieError::InvalidRequest {
+                message: format!(
+                    "model {} returns preprocessing data; use {} instead",
+                    operation.model(),
+                    operation.tool_name()
+                ),
+            });
+        }
         validate_model(&request.model, kind)?;
         let spec = super::catalog::resolve_model(&request.model, kind);
         validate_generation_request(request, spec)?;
@@ -256,6 +332,10 @@ impl KieClient {
         }
         let payload = create_task_payload(request, &uploaded, model, spec)?;
         debug!(model = %model, requested_model = %request.model, "creating Kie task");
+        self.post_create_task(&payload).await
+    }
+
+    async fn post_create_task(&self, payload: &Value) -> Result<String, KieError> {
         let response = self
             .http
             .post(format!("{}/api/v1/jobs/createTask", self.config.api_base))
@@ -266,6 +346,240 @@ impl KieClient {
         let envelope: CreateTaskResponse = parse_response(response).await?;
         let data: CreateTaskData = envelope.into_data()?;
         Ok(data.task_id)
+    }
+
+    pub async fn create_gemini_omni_audio_profile(
+        &self,
+        preset_voice: GeminiOmniVoice,
+        name: &str,
+        voice_description: Option<&str>,
+        example_dialogue: Option<&str>,
+    ) -> Result<GeminiOmniAudioResult, KieError> {
+        validate_required_text("name", name, 210)?;
+        validate_optional_text("voice_description", voice_description, 20_000)?;
+        validate_optional_text("example_dialogue", example_dialogue, 120)?;
+        let request = GeminiOmniAudioRequest {
+            audio_id: preset_voice,
+            name,
+            voice_description,
+            example_dialogue,
+        };
+        let response = self
+            .http
+            .post(format!("{}/api/v1/omni/audio/create", self.config.api_base))
+            .bearer_auth(self.config.require_api_key()?)
+            .json(&request)
+            .send()
+            .await?;
+        let envelope: ApiEnvelope<GeminiOmniAudioResult> = parse_response(response).await?;
+        envelope.into_data_with_success_code(0)
+    }
+
+    pub async fn create_gemini_omni_character(
+        &self,
+        description: &str,
+        image_url: Option<&str>,
+        local_image_path: Option<&Path>,
+        audio_ids: &[String],
+        character_name: Option<&str>,
+    ) -> Result<GeminiOmniCharacterResult, KieError> {
+        required_value("description", description)?;
+        validate_nonempty_items("audio_ids", audio_ids)?;
+        let image_url = self
+            .resolve_image_source(image_url, local_image_path, GEMINI_CHARACTER_IMAGE_UPLOAD)
+            .await?;
+        let request = GeminiOmniCharacterRequest {
+            descriptions: description,
+            image_urls: [&image_url],
+            audio_ids: (!audio_ids.is_empty()).then_some(audio_ids),
+            character_name,
+        };
+        let response = self
+            .http
+            .post(format!(
+                "{}/api/v1/omni/character/create",
+                self.config.api_base
+            ))
+            .bearer_auth(self.config.require_api_key()?)
+            .json(&request)
+            .send()
+            .await?;
+        let envelope: ApiEnvelope<GeminiOmniCharacterResult> = parse_response(response).await?;
+        envelope.into_data()
+    }
+
+    pub async fn grok_segment_map(
+        &self,
+        task_id: Option<&str>,
+        image_url: Option<&str>,
+        local_image_path: Option<&Path>,
+        output_name: Option<&str>,
+    ) -> Result<StructuredTaskResult, KieError> {
+        let image_source_count =
+            usize::from(image_url.is_some()) + usize::from(local_image_path.is_some());
+        let source_count = usize::from(task_id.is_some()) + image_source_count;
+        if source_count != 1 {
+            return Err(KieError::InvalidRequest {
+                message: "provide exactly one of task_id, image_url, or local_image_path"
+                    .to_string(),
+            });
+        }
+        let input = if let Some(task_id) = task_id {
+            json!({ "task_id": required_value("task_id", task_id)? })
+        } else {
+            let image_url = self
+                .resolve_image_source(image_url, local_image_path, DEFAULT_IMAGE_UPLOAD)
+                .await?;
+            json!({ "image_url": image_url })
+        };
+        self.run_structured_task(StructuredOperation::GrokSegmentMap, input, output_name)
+            .await
+    }
+
+    pub async fn omnihuman_identification(
+        &self,
+        image_url: Option<&str>,
+        local_image_path: Option<&Path>,
+    ) -> Result<StructuredTaskResult, KieError> {
+        let image_url = self
+            .resolve_image_source(image_url, local_image_path, OMNIHUMAN_IMAGE_UPLOAD)
+            .await?;
+        self.run_structured_task(
+            StructuredOperation::OmnihumanIdentification,
+            json!({ "image_url": image_url }),
+            None,
+        )
+        .await
+    }
+
+    pub async fn omnihuman_subject_detection(
+        &self,
+        image_url: Option<&str>,
+        local_image_path: Option<&Path>,
+        output_name: Option<&str>,
+    ) -> Result<StructuredTaskResult, KieError> {
+        let image_url = self
+            .resolve_image_source(image_url, local_image_path, OMNIHUMAN_IMAGE_UPLOAD)
+            .await?;
+        self.run_structured_task(
+            StructuredOperation::OmnihumanSubjectDetection,
+            json!({ "image_url": image_url }),
+            output_name,
+        )
+        .await
+    }
+
+    async fn resolve_image_source(
+        &self,
+        image_url: Option<&str>,
+        local_image_path: Option<&Path>,
+        upload_policy: ImageUploadPolicy,
+    ) -> Result<String, KieError> {
+        match (image_url, local_image_path) {
+            (Some(image_url), None) => {
+                let image_url = required_value("image_url", image_url)?;
+                validate_input_url("image_url", image_url)?;
+                Ok(image_url.to_string())
+            }
+            (None, Some(path)) => Ok(self.upload_image_file(path, upload_policy).await?.url),
+            _ => Err(KieError::InvalidRequest {
+                message: "provide exactly one of image_url or local_image_path".to_string(),
+            }),
+        }
+    }
+
+    async fn run_structured_task(
+        &self,
+        operation: StructuredOperation,
+        input: Value,
+        output_name: Option<&str>,
+    ) -> Result<StructuredTaskResult, KieError> {
+        debug!(model = operation.model(), "creating structured Kie task");
+        let task_id = self
+            .post_create_task(&json!({ "model": operation.model(), "input": input }))
+            .await?;
+        let record = self.wait_for_success(&task_id).await?;
+        self.complete_structured_task(record, output_name, true)
+            .await
+    }
+
+    pub async fn complete_structured_task(
+        &self,
+        record: TaskRecord,
+        output_name: Option<&str>,
+        download_previews: bool,
+    ) -> Result<StructuredTaskResult, KieError> {
+        let mut result = parse_structured_record(record)?;
+        if download_previews {
+            self.download_structured_previews(&mut result, output_name)
+                .await;
+        }
+        result.refresh_markdown();
+        Ok(result)
+    }
+
+    async fn download_structured_previews(
+        &self,
+        result: &mut StructuredTaskResult,
+        output_name: Option<&str>,
+    ) {
+        if matches!(
+            &result.output,
+            StructuredTaskOutput::OmnihumanIdentification { .. }
+        ) {
+            return;
+        }
+        let dir = self
+            .config
+            .output_dir
+            .join(output_dir_name(output_name, &result.task_id));
+        if let Err(err) = tokio::fs::create_dir_all(&dir).await {
+            set_preview_errors(result, &redact(&err.to_string()));
+            return;
+        }
+
+        match &mut result.output {
+            StructuredTaskOutput::GrokSegmentMap { segments, .. } => {
+                for segment in segments {
+                    let stem = format!("segment-{}", segment.index);
+                    match self
+                        .download_one(
+                            &segment.mask_url,
+                            &dir,
+                            &stem,
+                            0,
+                            GenerationKind::Image,
+                            true,
+                        )
+                        .await
+                    {
+                        Ok(media) => segment.local_path = Some(media.path),
+                        Err(err) => {
+                            let message = redact(&err.to_string());
+                            warn!(error = %message, "segment preview download failed");
+                            segment.preview_error = Some(message);
+                        }
+                    }
+                }
+            }
+            StructuredTaskOutput::OmnihumanSubjectDetection { masks } => {
+                for mask in masks {
+                    let stem = format!("subject-mask-{}", mask.index);
+                    match self
+                        .download_one(&mask.mask_url, &dir, &stem, 0, GenerationKind::Image, true)
+                        .await
+                    {
+                        Ok(media) => mask.local_path = Some(media.path),
+                        Err(err) => {
+                            let message = redact(&err.to_string());
+                            warn!(error = %message, "subject mask preview download failed");
+                            mask.preview_error = Some(message);
+                        }
+                    }
+                }
+            }
+            StructuredTaskOutput::OmnihumanIdentification { .. } => {}
+        }
     }
 
     pub async fn record_info(&self, task_id: &str) -> Result<TaskRecord, KieError> {
@@ -513,6 +827,63 @@ impl KieClient {
             "poster_urls": result.poster_urls,
             "markdown": result.markdown,
         })
+    }
+}
+
+fn required_value<'a>(field: &str, value: &'a str) -> Result<&'a str, KieError> {
+    if value.trim().is_empty() {
+        return Err(KieError::InvalidRequest {
+            message: format!("{field} must not be empty"),
+        });
+    }
+    Ok(value)
+}
+
+fn validate_required_text(field: &str, value: &str, max_chars: usize) -> Result<(), KieError> {
+    required_value(field, value)?;
+    if value.chars().count() > max_chars {
+        return Err(KieError::InvalidRequest {
+            message: format!("{field} must not exceed {max_chars} characters"),
+        });
+    }
+    Ok(())
+}
+
+fn validate_optional_text(
+    field: &str,
+    value: Option<&str>,
+    max_chars: usize,
+) -> Result<(), KieError> {
+    if value.is_some_and(|value| value.chars().count() > max_chars) {
+        return Err(KieError::InvalidRequest {
+            message: format!("{field} must not exceed {max_chars} characters"),
+        });
+    }
+    Ok(())
+}
+
+fn validate_nonempty_items(field: &str, values: &[String]) -> Result<(), KieError> {
+    if values.iter().any(|value| value.trim().is_empty()) {
+        return Err(KieError::InvalidRequest {
+            message: format!("{field} must not contain empty values"),
+        });
+    }
+    Ok(())
+}
+
+fn set_preview_errors(result: &mut StructuredTaskResult, message: &str) {
+    match &mut result.output {
+        StructuredTaskOutput::GrokSegmentMap { segments, .. } => {
+            for segment in segments {
+                segment.preview_error = Some(message.to_string());
+            }
+        }
+        StructuredTaskOutput::OmnihumanSubjectDetection { masks } => {
+            for mask in masks {
+                mask.preview_error = Some(message.to_string());
+            }
+        }
+        StructuredTaskOutput::OmnihumanIdentification { .. } => {}
     }
 }
 

@@ -23,6 +23,10 @@ use kie_mcp::{
         KieClient, KieError,
         client::redact,
         jobs::{GenerationKind, GenerationRequest},
+        operations::{
+            GROK_SEGMENT_MAP_MODEL, GeminiOmniVoice, OMNIHUMAN_IDENTIFICATION_MODEL,
+            OMNIHUMAN_SUBJECT_DETECTION_MODEL, StructuredTaskOutput,
+        },
     },
 };
 use serde_json::{Value, json};
@@ -35,6 +39,9 @@ struct MockState {
     final_state: Arc<Mutex<String>>,
     media_download_count: Arc<AtomicUsize>,
     next_task: Arc<AtomicUsize>,
+    omni_audio_code: Arc<AtomicUsize>,
+    omni_audio_payloads: Arc<Mutex<Vec<Value>>>,
+    omni_character_payloads: Arc<Mutex<Vec<Value>>>,
     record_failures: Arc<AtomicUsize>,
     result_json: Arc<Mutex<Option<String>>>,
     task_models: Arc<Mutex<HashMap<String, String>>>,
@@ -752,6 +759,221 @@ async fn missing_api_key_is_reported_without_secret_material() {
     );
 }
 
+#[tokio::test]
+async fn gemini_omni_profiles_use_their_dedicated_routes() {
+    let server = MockServer::start().await;
+    let temp = TempDir::new().unwrap();
+    let client = client_for(&server, temp.path().join("out"));
+
+    let audio = client
+        .create_gemini_omni_audio_profile(
+            GeminiOmniVoice::Achernar,
+            "Narrator",
+            Some("Calm and clear"),
+            Some("Hello there"),
+        )
+        .await
+        .unwrap();
+    assert_eq!(audio.audio_id, "audio_mock");
+
+    let character = client
+        .create_gemini_omni_character(
+            "A silver-haired explorer",
+            Some("https://example.com/character.png"),
+            None,
+            std::slice::from_ref(&audio.audio_id),
+            Some("Nova"),
+        )
+        .await
+        .unwrap();
+    assert_eq!(character.character_id, "character_mock");
+
+    let audio_payloads = server.state.omni_audio_payloads.lock().unwrap();
+    assert_eq!(audio_payloads[0]["audio_id"], "achernar");
+    assert_eq!(audio_payloads[0]["name"], "Narrator");
+    drop(audio_payloads);
+
+    let character_payloads = server.state.omni_character_payloads.lock().unwrap();
+    assert_eq!(
+        character_payloads[0]["descriptions"],
+        "A silver-haired explorer"
+    );
+    assert!(character_payloads[0].get("description").is_none());
+    assert_eq!(
+        character_payloads[0]["image_urls"][0],
+        "https://example.com/character.png"
+    );
+    assert_eq!(character_payloads[0]["audio_ids"][0], "audio_mock");
+}
+
+#[tokio::test]
+async fn gemini_omni_audio_rejects_nonzero_api_codes_and_long_fields() {
+    let server = MockServer::start_with_omni_audio_code(400).await;
+    let temp = TempDir::new().unwrap();
+    let client = client_for(&server, temp.path().join("out"));
+
+    let err = client
+        .create_gemini_omni_audio_profile(GeminiOmniVoice::Puck, "Narrator", None, None)
+        .await
+        .unwrap_err();
+    assert!(matches!(err, KieError::ApiCode { code: 400, .. }));
+
+    let err = client
+        .create_gemini_omni_audio_profile(GeminiOmniVoice::Puck, &"n".repeat(211), None, None)
+        .await
+        .unwrap_err();
+    assert!(err.to_string().contains("210 characters"));
+}
+
+#[tokio::test]
+async fn grok_segment_map_returns_indexes_urls_and_local_previews() {
+    let server = MockServer::start().await;
+    let temp = TempDir::new().unwrap();
+    let client = client_for(&server, temp.path().join("out"));
+
+    let result = client
+        .grok_segment_map(Some("source_task"), None, None, Some("grok-segments"))
+        .await
+        .unwrap();
+
+    assert_eq!(result.model, GROK_SEGMENT_MAP_MODEL);
+    let StructuredTaskOutput::GrokSegmentMap {
+        segments_count,
+        segments,
+    } = result.output
+    else {
+        panic!("expected Grok segment output");
+    };
+    assert_eq!(segments_count, 1);
+    assert_eq!(segments[0].index, 0);
+    assert_eq!(segments[0].name, "dog");
+    assert!(segments[0].local_path.as_ref().unwrap().exists());
+
+    let payloads = server.state.create_payloads.lock().unwrap();
+    assert_eq!(payloads[0]["model"], GROK_SEGMENT_MAP_MODEL);
+    assert_eq!(payloads[0]["input"]["task_id"], "source_task");
+}
+
+#[tokio::test]
+async fn omnihuman_operations_return_raw_status_and_mask_previews() {
+    let identification_server = MockServer::start().await;
+    let temp = TempDir::new().unwrap();
+    let identification_client = client_for(&identification_server, temp.path().join("identify"));
+    let identification = identification_client
+        .omnihuman_identification(Some("https://example.com/portrait.png"), None)
+        .await
+        .unwrap();
+    assert_eq!(identification.model, OMNIHUMAN_IDENTIFICATION_MODEL);
+    assert!(matches!(
+        identification.output,
+        StructuredTaskOutput::OmnihumanIdentification { subject_status: 1 }
+    ));
+
+    let detection_server = MockServer::start().await;
+    let detection_client = client_for(&detection_server, temp.path().join("detect"));
+    let detection = detection_client
+        .omnihuman_subject_detection(
+            Some("https://example.com/group.png"),
+            None,
+            Some("subjects"),
+        )
+        .await
+        .unwrap();
+    assert_eq!(detection.model, OMNIHUMAN_SUBJECT_DETECTION_MODEL);
+    let StructuredTaskOutput::OmnihumanSubjectDetection { masks } = detection.output else {
+        panic!("expected OmniHuman subject masks");
+    };
+    assert_eq!(masks.len(), 2);
+    assert!(
+        masks
+            .iter()
+            .all(|mask| mask.local_path.as_ref().is_some_and(|path| path.exists()))
+    );
+}
+
+#[tokio::test]
+async fn structured_operations_validate_sources_and_stay_out_of_media_generation() {
+    let server = MockServer::start().await;
+    let temp = TempDir::new().unwrap();
+    let client = client_for(&server, temp.path().join("out"));
+
+    let err = client
+        .grok_segment_map(
+            Some("task_1"),
+            Some("https://example.com/image.png"),
+            None,
+            None,
+        )
+        .await
+        .unwrap_err();
+    assert!(err.to_string().contains("exactly one"));
+
+    let err = client
+        .create_task(
+            &GenerationRequest {
+                model: GROK_SEGMENT_MAP_MODEL.to_string(),
+                prompt: String::new(),
+                input_urls: Vec::new(),
+                local_input_paths: Vec::new(),
+                input: json!({ "task_id": "task_1" }),
+                aspect_ratio: None,
+                resolution: None,
+                output_format: None,
+                output_name: None,
+            },
+            GenerationKind::Image,
+        )
+        .await
+        .unwrap_err();
+    assert!(err.to_string().contains("kie_grok_image_2_segment_map"));
+
+    let err = client
+        .omnihuman_identification(Some("file:///tmp/portrait.png"), None)
+        .await
+        .unwrap_err();
+    assert!(err.to_string().contains("valid http or https URL"));
+}
+
+#[tokio::test]
+async fn omnihuman_local_images_enforce_image_type_and_endpoint_size() {
+    let server = MockServer::start().await;
+    let temp = TempDir::new().unwrap();
+    let client = client_for(&server, temp.path().join("out"));
+
+    let video = temp.path().join("portrait.mp4");
+    tokio::fs::write(&video, b"not-an-image").await.unwrap();
+    let err = client
+        .omnihuman_identification(None, Some(&video))
+        .await
+        .unwrap_err();
+    assert!(err.to_string().contains("must be an image file"));
+
+    let webp = temp.path().join("portrait.webp");
+    tokio::fs::write(&webp, b"webp").await.unwrap();
+    let err = client
+        .omnihuman_identification(None, Some(&webp))
+        .await
+        .unwrap_err();
+    assert!(err.to_string().contains("expected JPEG or PNG"));
+
+    let large_image = temp.path().join("large.png");
+    tokio::fs::write(&large_image, vec![0; 5 * 1024 * 1024 + 1])
+        .await
+        .unwrap();
+    let err = client
+        .omnihuman_identification(None, Some(&large_image))
+        .await
+        .unwrap_err();
+    assert!(matches!(
+        err,
+        KieError::LocalInputTooLarge {
+            limit: 5_242_880,
+            ..
+        }
+    ));
+    assert_eq!(server.state.upload_count.load(Ordering::SeqCst), 0);
+}
+
 fn client_for(server: &MockServer, output_dir: PathBuf) -> KieClient {
     KieClient::new(config_for(server, output_dir))
 }
@@ -787,6 +1009,12 @@ impl MockServer {
         Self::start_with_options(0, credit_code, None).await
     }
 
+    async fn start_with_omni_audio_code(code: usize) -> Self {
+        let server = Self::start().await;
+        server.state.omni_audio_code.store(code, Ordering::SeqCst);
+        server
+    }
+
     async fn start_with_result_json(result_json: &str) -> Self {
         Self::start_with_options(0, 200, Some(result_json.to_string())).await
     }
@@ -808,6 +1036,9 @@ impl MockServer {
             final_state: Arc::new(Mutex::new("success".to_string())),
             media_download_count: Arc::new(AtomicUsize::new(0)),
             next_task: Arc::new(AtomicUsize::new(0)),
+            omni_audio_code: Arc::new(AtomicUsize::new(0)),
+            omni_audio_payloads: Arc::new(Mutex::new(Vec::new())),
+            omni_character_payloads: Arc::new(Mutex::new(Vec::new())),
             record_failures: Arc::new(AtomicUsize::new(record_failures)),
             result_json: Arc::new(Mutex::new(result_json)),
             task_models: Arc::new(Mutex::new(HashMap::new())),
@@ -817,6 +1048,8 @@ impl MockServer {
         let app = Router::new()
             .route("/api/v1/jobs/createTask", post(create_task))
             .route("/api/v1/jobs/recordInfo", get(record_info))
+            .route("/api/v1/omni/audio/create", post(create_omni_audio))
+            .route("/api/v1/omni/character/create", post(create_omni_character))
             .route("/api/v1/common/download-url", post(download_url))
             .route("/api/file-stream-upload", post(upload_file))
             .route("/api/v1/chat/credit", get(credits))
@@ -872,6 +1105,39 @@ async fn create_task(
     }))
 }
 
+async fn create_omni_audio(
+    State(state): State<MockState>,
+    headers: HeaderMap,
+    Json(payload): Json<Value>,
+) -> impl IntoResponse {
+    assert_bearer(&headers);
+    state.omni_audio_payloads.lock().unwrap().push(payload);
+    let code = state.omni_audio_code.load(Ordering::SeqCst);
+    Json(json!({
+        "code": code,
+        "msg": if code == 0 { "success" } else { "audio profile error" },
+        "data": { "kieAudioId": "audio_mock", "name": "Narrator" }
+    }))
+}
+
+async fn create_omni_character(
+    State(state): State<MockState>,
+    headers: HeaderMap,
+    Json(payload): Json<Value>,
+) -> impl IntoResponse {
+    assert_bearer(&headers);
+    state.omni_character_payloads.lock().unwrap().push(payload);
+    Json(json!({
+        "code": 200,
+        "msg": "success",
+        "data": {
+            "characterId": "character_mock",
+            "characterName": "Nova",
+            "imageUrl": "https://example.com/character-result.png"
+        }
+    }))
+}
+
 async fn record_info(
     State(state): State<MockState>,
     Query(query): Query<HashMap<String, String>>,
@@ -923,7 +1189,13 @@ async fn record_info(
         .unwrap()
         .clone()
         .unwrap_or_else(|| {
-            if model.contains("video") {
+            if model == GROK_SEGMENT_MAP_MODEL {
+                r#"{"resultObject":{"segments_count":1,"segments":[{"maskUrl":"https://kie.example/mask-0.png","name":"dog","index":0}]}}"#.to_string()
+            } else if model == OMNIHUMAN_IDENTIFICATION_MODEL {
+                r#"{"resultObject":{"subject_status":1}}"#.to_string()
+            } else if model == OMNIHUMAN_SUBJECT_DETECTION_MODEL {
+                r#"{"resultObject":{"mask_urls":["https://kie.example/mask-0.png","https://kie.example/mask-1.png"]}}"#.to_string()
+            } else if model.contains("video") {
                 "{\"videoInfo\":{\"videoUrl\":\"https://kie.example/video-will-be-rewritten\",\"imageUrl\":\"https://kie.example/poster-will-be-rewritten\"}}".to_string()
             } else if task_id == "task_mock" {
                 "{\"resultUrls\":[\"https://kie.example/will-be-rewritten\"]}".to_string()
@@ -1022,6 +1294,16 @@ async fn upload_file(
             "downloadUrl": format!("http://{host}/uploaded/input.png")
         }
     }))
+}
+
+fn assert_bearer(headers: &HeaderMap) {
+    assert!(
+        headers
+            .get("authorization")
+            .and_then(|value| value.to_str().ok())
+            .unwrap_or_default()
+            .starts_with("Bearer ")
+    );
 }
 
 async fn media_image(State(state): State<MockState>) -> impl IntoResponse {

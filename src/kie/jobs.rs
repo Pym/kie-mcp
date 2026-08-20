@@ -63,7 +63,11 @@ pub struct ApiEnvelope<T> {
 
 impl<T> ApiEnvelope<T> {
     pub fn into_data(self) -> Result<T, KieError> {
-        if self.code != 200 {
+        self.into_data_with_success_code(200)
+    }
+
+    pub fn into_data_with_success_code(self, success_code: i64) -> Result<T, KieError> {
+        if self.code != success_code {
             return Err(KieError::ApiCode {
                 code: self.code,
                 message: self.msg,
@@ -327,14 +331,19 @@ fn apply_prompt(
 
 fn validate_input_urls(urls: &[String]) -> Result<(), KieError> {
     for (index, value) in urls.iter().enumerate() {
-        let parsed = url::Url::parse(value).map_err(|_| KieError::InvalidRequest {
-            message: format!("input_urls[{index}] must be a valid http or https URL"),
-        })?;
-        if !matches!(parsed.scheme(), "http" | "https") || parsed.host_str().is_none() {
-            return Err(KieError::InvalidRequest {
-                message: format!("input_urls[{index}] must be a valid http or https URL"),
-            });
-        }
+        validate_input_url(&format!("input_urls[{index}]"), value)?;
+    }
+    Ok(())
+}
+
+pub(crate) fn validate_input_url(field: &str, value: &str) -> Result<(), KieError> {
+    let parsed = url::Url::parse(value).map_err(|_| KieError::InvalidRequest {
+        message: format!("{field} must be a valid http or https URL"),
+    })?;
+    if !matches!(parsed.scheme(), "http" | "https") || parsed.host_str().is_none() {
+        return Err(KieError::InvalidRequest {
+            message: format!("{field} must be a valid http or https URL"),
+        });
     }
     Ok(())
 }

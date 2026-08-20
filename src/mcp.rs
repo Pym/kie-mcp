@@ -15,10 +15,11 @@ use crate::{
         KieClient, KieError,
         catalog::{CATALOG_SOURCE, models_for, resolve_model_any_kind},
         jobs::{GenerationKind, GenerationRequest, model_kind, public_status},
+        operations::{GeminiOmniVoice, StructuredOperation, StructuredTaskResult},
     },
 };
 
-const SERVER_INSTRUCTIONS: &str = "Generate Kie.ai images and videos, then use the returned local files. Call kie_models to inspect prompt policy and media bindings. Put model-specific fields in input, and use input_urls or local_input_paths only for cataloged simple media bindings.";
+const SERVER_INSTRUCTIONS: &str = "Generate Kie.ai images and videos, then use the returned local files. Call kie_models to inspect prompt policy and media bindings. Put model-specific fields in input. Use the dedicated Gemini Omni tools to create reusable audio and character IDs. Use Grok Segment Map before a masked Grok Image 2 edit. Use OmniHuman identification or subject detection only when the portrait needs validation or subject selection.";
 
 #[derive(Debug, Clone)]
 pub struct KieMcp {
@@ -134,6 +135,83 @@ pub struct ModelsParams {
     pub query: Option<String>,
 }
 
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct GeminiOmniAudioParams {
+    #[schemars(
+        description = "Preset Gemini Omni voice. Choices: achernar female soft high; achird male friendly mid; algenib male raspy low; algieba male easygoing mid-low; alnilam male steady mid-low; aoede female brisk mid; autonoe female bright mid; callirrhoe female easygoing mid; charon male intellectual low; despina female smooth mid; enceladus male breathy low; erinome female clear mid; fenrir male lively young; gacrux female mature mid; iapetus male clear mid-low; kore female capable mid; laomedeia female cheerful mid-high; leda female young mid-high; orus male steady mid-low; puck male cheerful mid; pulcherrima genderless forward mid-high; rasalgethi male intellectual mid; sadachbia male vivid low; sadaltager male knowledgeable mid; schedar male smooth mid-low; sulafat female warm mid; umbriel male smooth low; vindemiatrix female gentle mid; zephyr female bright mid-high; zubenelgenubi male casual mid-low."
+    )]
+    pub preset_voice: GeminiOmniVoice,
+    #[schemars(description = "Name for the reusable audio profile, up to 210 characters.")]
+    pub name: String,
+    #[serde(default)]
+    #[schemars(description = "Optional voice traits, style, speed, and emotion.")]
+    pub voice_description: Option<String>,
+    #[serde(default)]
+    #[schemars(description = "Optional sample dialogue, up to 120 characters.")]
+    pub example_dialogue: Option<String>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct GeminiOmniCharacterParams {
+    #[schemars(description = "Character appearance, identity, clothing, style, or personality.")]
+    pub description: String,
+    #[serde(default)]
+    #[schemars(
+        description = "Public character reference image URL. Use either this or local_image_path."
+    )]
+    pub image_url: Option<String>,
+    #[serde(default)]
+    #[schemars(
+        description = "Local character reference image, at most 20 MB. Use either this or image_url."
+    )]
+    pub local_image_path: Option<std::path::PathBuf>,
+    #[serde(default)]
+    #[schemars(
+        description = "Optional audio IDs returned by kie_gemini_omni_create_audio_profile."
+    )]
+    pub audio_ids: Vec<String>,
+    #[serde(default)]
+    #[schemars(description = "Optional character name.")]
+    pub character_name: Option<String>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct GrokSegmentMapParams {
+    #[serde(default)]
+    #[schemars(description = "Existing Grok Image 2 task ID. Use exactly one source field.")]
+    pub task_id: Option<String>,
+    #[serde(default)]
+    #[schemars(description = "Public source image URL. Use exactly one source field.")]
+    pub image_url: Option<String>,
+    #[serde(default)]
+    #[schemars(description = "Local source image to upload. Use exactly one source field.")]
+    pub local_image_path: Option<std::path::PathBuf>,
+    #[serde(default)]
+    #[schemars(description = "Optional safe directory stem for downloaded segment previews.")]
+    pub output_name: Option<String>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct OmnihumanImageParams {
+    #[serde(default)]
+    #[schemars(description = "Public portrait image URL. Use either this or local_image_path.")]
+    pub image_url: Option<String>,
+    #[serde(default)]
+    #[schemars(
+        description = "Local JPEG or PNG portrait, at most 5 MB. Use either this or image_url."
+    )]
+    pub local_image_path: Option<std::path::PathBuf>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct OmnihumanDetectionParams {
+    #[serde(flatten)]
+    pub image: OmnihumanImageParams,
+    #[serde(default)]
+    #[schemars(description = "Optional safe directory stem for downloaded mask previews.")]
+    pub output_name: Option<String>,
+}
+
 #[derive(Debug, Serialize)]
 struct UploadResult {
     path: std::path::PathBuf,
@@ -174,7 +252,14 @@ impl KieMcp {
             "source": CATALOG_SOURCE,
             "count": models.len(),
             "models": models,
-            "note": "Pass display_name, alias, or canonical id to kie_generate_image/kie_generate_video. Model-specific fields that are not listed as convenience fields belong in input."
+            "specialized_tools": [
+                "kie_gemini_omni_create_audio_profile",
+                "kie_gemini_omni_create_character",
+                "kie_grok_image_2_segment_map",
+                "kie_omnihuman_human_identification",
+                "kie_omnihuman_subject_detection"
+            ],
+            "note": "Pass display_name, alias, or canonical id to kie_generate_image/kie_generate_video. Model-specific fields that are not listed as convenience fields belong in input. Preprocessing operations use the dedicated tools and are not included in count."
         }))
         .map_err(to_mcp_error)?;
         let lines = models
@@ -205,7 +290,133 @@ impl KieMcp {
     }
 
     #[tool(
-        description = "Query a Kie.ai Market task status and optionally download media if it has completed, inferring media_type from the task model when omitted."
+        description = "Create a reusable Gemini Omni audio profile for later Gemini Omni Video requests. This returns an audio_id, not an audio file. Pass the ID in input.audio_ids when generating video."
+    )]
+    async fn kie_gemini_omni_create_audio_profile(
+        &self,
+        Parameters(params): Parameters<GeminiOmniAudioParams>,
+    ) -> Result<CallToolResult, McpError> {
+        match self
+            .client
+            .create_gemini_omni_audio_profile(
+                params.preset_voice,
+                &params.name,
+                params.voice_description.as_deref(),
+                params.example_dialogue.as_deref(),
+            )
+            .await
+        {
+            Ok(result) => {
+                let value = serde_json::to_value(&result).map_err(to_mcp_error)?;
+                Ok(tool_success(
+                    value,
+                    &format!(
+                        "Created Gemini Omni audio profile `{}`. Pass this ID in `input.audio_ids`.",
+                        result.audio_id
+                    ),
+                ))
+            }
+            Err(err) => Ok(tool_error(err)),
+        }
+    }
+
+    #[tool(
+        description = "Create a reusable Gemini Omni character from one reference image and optional audio profile IDs. Pass the returned character_id in input.character_ids when generating with gemini-omni-video."
+    )]
+    async fn kie_gemini_omni_create_character(
+        &self,
+        Parameters(params): Parameters<GeminiOmniCharacterParams>,
+    ) -> Result<CallToolResult, McpError> {
+        match self
+            .client
+            .create_gemini_omni_character(
+                &params.description,
+                params.image_url.as_deref(),
+                params.local_image_path.as_deref(),
+                &params.audio_ids,
+                params.character_name.as_deref(),
+            )
+            .await
+        {
+            Ok(result) => {
+                let value = serde_json::to_value(&result).map_err(to_mcp_error)?;
+                Ok(tool_success(
+                    value,
+                    &format!(
+                        "Created Gemini Omni character `{}`. Pass this ID in `input.character_ids`.",
+                        result.character_id
+                    ),
+                ))
+            }
+            Err(err) => Ok(tool_error(err)),
+        }
+    }
+
+    #[tool(
+        description = "Build a Grok Image 2 segment map from an existing task or one image. Returns a new task_id, named segment indexes, mask URLs, and local previews. Pass that task_id and the selected indexes as input.task_id and input.mask_indexs with grok-imagine-image-2-0/image-edit."
+    )]
+    async fn kie_grok_image_2_segment_map(
+        &self,
+        Parameters(params): Parameters<GrokSegmentMapParams>,
+    ) -> Result<CallToolResult, McpError> {
+        match self
+            .client
+            .grok_segment_map(
+                params.task_id.as_deref(),
+                params.image_url.as_deref(),
+                params.local_image_path.as_deref(),
+                params.output_name.as_deref(),
+            )
+            .await
+        {
+            Ok(result) => structured_tool_success(result),
+            Err(err) => Ok(tool_error(err)),
+        }
+    }
+
+    #[tool(
+        description = "Run the OmniHuman 1.5 portrait identification preflight. Returns Kie's raw integer subject_status without guessing its undocumented meaning."
+    )]
+    async fn kie_omnihuman_human_identification(
+        &self,
+        Parameters(params): Parameters<OmnihumanImageParams>,
+    ) -> Result<CallToolResult, McpError> {
+        match self
+            .client
+            .omnihuman_identification(
+                params.image_url.as_deref(),
+                params.local_image_path.as_deref(),
+            )
+            .await
+        {
+            Ok(result) => structured_tool_success(result),
+            Err(err) => Ok(tool_error(err)),
+        }
+    }
+
+    #[tool(
+        description = "Detect up to five subjects for OmniHuman 1.5. Returns mask URLs and local previews. Pass chosen URLs in input.mask_url when generating with omnihuman-1-5."
+    )]
+    async fn kie_omnihuman_subject_detection(
+        &self,
+        Parameters(params): Parameters<OmnihumanDetectionParams>,
+    ) -> Result<CallToolResult, McpError> {
+        match self
+            .client
+            .omnihuman_subject_detection(
+                params.image.image_url.as_deref(),
+                params.image.local_image_path.as_deref(),
+                params.output_name.as_deref(),
+            )
+            .await
+        {
+            Ok(result) => structured_tool_success(result),
+            Err(err) => Ok(tool_error(err)),
+        }
+    }
+
+    #[tool(
+        description = "Query a Kie.ai Market task. Completed generation tasks can download media. Completed Grok Segment Map and OmniHuman preparation tasks return typed results and can download mask previews."
     )]
     async fn kie_task_status(
         &self,
@@ -215,6 +426,22 @@ impl KieMcp {
             Ok(record) => record,
             Err(err) => return Ok(tool_error(err)),
         };
+        if record.state == crate::kie::jobs::TaskState::Success
+            && StructuredOperation::from_model(&record.model).is_some()
+        {
+            return match self
+                .client
+                .complete_structured_task(
+                    record,
+                    params.output_name.as_deref(),
+                    params.download_if_complete,
+                )
+                .await
+            {
+                Ok(result) => structured_tool_success(result),
+                Err(err) => Ok(tool_error(err)),
+            };
+        }
         if params.download_if_complete && record.state == crate::kie::jobs::TaskState::Success {
             let media_type = task_status_download_kind(&record.model, params.media_type);
             match self
@@ -305,6 +532,12 @@ fn tool_success(structured: Value, markdown: &str) -> CallToolResult {
     let mut result = CallToolResult::structured(structured);
     result.content = vec![ContentBlock::text(markdown.to_string())];
     result
+}
+
+fn structured_tool_success(result: StructuredTaskResult) -> Result<CallToolResult, McpError> {
+    let markdown = result.markdown.clone();
+    let value = serde_json::to_value(result).map_err(to_mcp_error)?;
+    Ok(tool_success(value, &markdown))
 }
 
 fn tool_error(err: KieError) -> CallToolResult {

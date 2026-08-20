@@ -2,7 +2,9 @@
 
 A small MCP server that gives your agent access to Kie.ai image and video
 generation. It discovers models, uploads local reference media, waits for Kie,
-downloads the result, and returns local paths with Markdown previews.
+downloads the result, and returns local paths with Markdown previews. Dedicated
+tools also cover the preparation steps used by Grok Image 2, Gemini Omni Video,
+and OmniHuman 1.5.
 
 ## Install
 
@@ -64,15 +66,23 @@ Once connected, ask your agent normally:
 - "Generate a 16:9 editorial photo with Kie and save it as `cover`."
 - "Turn `/absolute/path/product.png` into a five-second product video."
 - "Show me the available Nano Banana models."
+- "Show me the editable segments in this Grok image."
+- "Create a reusable Gemini Omni character from this portrait."
 - "How many Kie credits do I have left?"
 
-The server exposes six tools:
+The server exposes 11 tools. Six cover generation and account operations, while
+five handle model-specific preparation:
 
 | Tool | Purpose |
 | --- | --- |
 | `kie_generate_image` | Generate or edit an image and download it locally. |
 | `kie_generate_video` | Generate a video and download it locally. |
 | `kie_models` | Find supported model IDs, aliases, and common inputs. |
+| `kie_gemini_omni_create_audio_profile` | Create an audio profile ID for Gemini Omni Video. |
+| `kie_gemini_omni_create_character` | Create a character ID for Gemini Omni Video. |
+| `kie_grok_image_2_segment_map` | Find Grok Image 2 segments and download their masks. |
+| `kie_omnihuman_human_identification` | Run OmniHuman's portrait identification preflight. |
+| `kie_omnihuman_subject_detection` | Find OmniHuman subjects and download their masks. |
 | `kie_task_status` | Check or download an existing task. |
 | `kie_upload_media` | Upload a local file for model-specific workflows. |
 | `kie_credits` | Read the current account credit balance. |
@@ -88,6 +98,24 @@ files through `local_input_paths`. Local files are uploaded automatically. These
 shortcuts require a cataloged media binding; for an uncataloged raw model ID,
 put every model-specific field directly in `input` so the server does not guess
 Kie's field names.
+
+### Model-specific preparation
+
+The five preparation tools are composable. The server does not call them
+silently.
+
+- Gemini Omni Audio returns an `audio_id`. Pass it to Gemini Omni Character or
+  to `gemini-omni-video` through `input.audio_ids`.
+- Gemini Omni Character returns a `character_id`. Pass it to
+  `gemini-omni-video` through `input.character_ids`.
+- Grok Segment Map returns a source `task_id` and numbered masks. Generate the
+  edit with `grok-imagine-image-2-0/image-edit`, then place the selected indexes
+  in `input.mask_indexs`. The field spelling follows Kie's API.
+- OmniHuman Subject Detection returns mask URLs and local previews. Pass the
+  chosen URLs to `omnihuman-1-5` through `input.mask_url`.
+- OmniHuman Human Identification returns Kie's integer `subject_status` as-is.
+  Kie's documentation does not define the values, so the server does not label
+  them as success or failure.
 
 ## Files and settings
 
@@ -107,7 +135,7 @@ limitations are documented in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
 ## Cost and privacy
 
-- Generations and parallel variants can consume Kie credits.
+- Generation and preparation calls can consume Kie credits.
 - Prompts, model inputs, URLs, and uploaded files are sent to Kie.
 - Generated files remain on disk until you remove them.
 - Keep API keys, signed URLs, and sensitive output directories private.

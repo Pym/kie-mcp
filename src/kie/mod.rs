@@ -2,6 +2,7 @@ pub mod catalog;
 pub mod client;
 pub mod jobs;
 pub mod normalize;
+pub mod operations;
 
 pub use client::KieClient;
 pub use jobs::{

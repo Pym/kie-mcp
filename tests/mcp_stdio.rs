@@ -83,12 +83,23 @@ async fn stdio_server_lists_kie_tools() {
         .iter()
         .map(|tool| tool["name"].as_str().unwrap().to_string())
         .collect();
-    assert!(names.contains(&"kie_generate_image".to_string()));
-    assert!(names.contains(&"kie_generate_video".to_string()));
-    assert!(names.contains(&"kie_models".to_string()));
-    assert!(names.contains(&"kie_task_status".to_string()));
-    assert!(names.contains(&"kie_upload_media".to_string()));
-    assert!(names.contains(&"kie_credits".to_string()));
+    let expected = [
+        "kie_generate_image",
+        "kie_generate_video",
+        "kie_models",
+        "kie_gemini_omni_create_audio_profile",
+        "kie_gemini_omni_create_character",
+        "kie_grok_image_2_segment_map",
+        "kie_omnihuman_human_identification",
+        "kie_omnihuman_subject_detection",
+        "kie_task_status",
+        "kie_upload_media",
+        "kie_credits",
+    ];
+    assert_eq!(names.len(), expected.len());
+    for name in expected {
+        assert!(names.iter().any(|candidate| candidate == name), "{name}");
+    }
 
     let image_tool = tools["result"]["tools"]
         .as_array()
@@ -104,6 +115,46 @@ async fn stdio_server_lists_kie_tools() {
         .expect("tool schema should list required fields");
     assert!(required.iter().any(|field| field == "model"));
     assert!(!required.iter().any(|field| field == "prompt"));
+
+    let audio_tool = tools["result"]["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|tool| tool["name"] == "kie_gemini_omni_create_audio_profile")
+        .unwrap();
+    let audio_required = audio_tool["inputSchema"]["required"].as_array().unwrap();
+    assert!(audio_required.iter().any(|field| field == "preset_voice"));
+    assert!(audio_required.iter().any(|field| field == "name"));
+    assert_eq!(
+        audio_tool["inputSchema"]["properties"]["preset_voice"]["$ref"],
+        "#/$defs/GeminiOmniVoice"
+    );
+    let voices = audio_tool["inputSchema"]["$defs"]["GeminiOmniVoice"]["enum"]
+        .as_array()
+        .unwrap();
+    assert!(voices.iter().any(|voice| voice == "achernar"));
+
+    let segment_tool = tools["result"]["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|tool| tool["name"] == "kie_grok_image_2_segment_map")
+        .unwrap();
+    let segment_properties = &segment_tool["inputSchema"]["properties"];
+    assert!(segment_properties.get("task_id").is_some());
+    assert!(segment_properties.get("image_url").is_some());
+    assert!(segment_properties.get("local_image_path").is_some());
+
+    let detection_tool = tools["result"]["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|tool| tool["name"] == "kie_omnihuman_subject_detection")
+        .unwrap();
+    let detection_properties = &detection_tool["inputSchema"]["properties"];
+    assert!(detection_properties.get("image_url").is_some());
+    assert!(detection_properties.get("local_image_path").is_some());
+    assert!(detection_properties.get("output_name").is_some());
 
     child.kill().await.unwrap();
 }
