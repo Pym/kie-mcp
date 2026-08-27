@@ -372,7 +372,7 @@ impl KieMcp {
     }
 
     #[tool(
-        description = "Build a Grok Image 2 segment map from an existing task or one image. Returns a new task_id, named segment indexes, mask URLs, and local previews. Pass that task_id and the selected indexes as input.task_id and input.mask_indexs with grok-imagine-image-2-0/image-edit."
+        description = "Build a Grok Image 2 segment map from an existing task or one image. Returns a new task_id, named segment indexes, mask URLs, and local previews. Pass that task_id and the selected indexes as input.task_id and input.mask_indexs to kie_generate_image with model grok-imagine-image-2-0/segment-edit and a prompt."
     )]
     async fn kie_grok_image_2_segment_map(
         &self,

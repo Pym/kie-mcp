@@ -120,6 +120,12 @@ Grok Segment Map and the two OmniHuman preparation models live in
 `kie_generate_video`. Gemini Omni Audio and Character use separate endpoints
 and are not generation model entries.
 
+Grok Segment Edit is a normal image generation route. It consumes the new
+`task_id` returned by Segment Map plus selected `mask_indexs` through raw
+`input`, and uses the canonical model ID
+`grok-imagine-image-2-0/segment-edit`. Do not confuse it with the separate
+`grok-imagine-image-2-0/image-edit` route, whose media input is `image_urls`.
+
 ## Configuration reference
 
 | Variable | Default | Purpose |

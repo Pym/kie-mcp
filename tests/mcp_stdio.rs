@@ -156,6 +156,15 @@ async fn stdio_server_lists_kie_tools() {
     assert!(segment_properties.get("task_id").is_some());
     assert!(segment_properties.get("image_url").is_some());
     assert!(segment_properties.get("local_image_path").is_some());
+    let segment_description = segment_tool["description"].as_str().unwrap();
+    assert!(
+        segment_description.contains("grok-imagine-image-2-0/segment-edit"),
+        "{segment_description}"
+    );
+    assert!(
+        !segment_description.contains("with grok-imagine-image-2-0/image-edit"),
+        "{segment_description}"
+    );
 
     let detection_tool = tools["result"]["tools"]
         .as_array()

@@ -1,7 +1,7 @@
 {
   "source": "https://docs.kie.ai/llms.txt",
-  "verified_at": "2026-08-20",
-  "llms_sha256": "43e0b581b8289c0498d44f31fa8740bd44f9d77eb28394840388a73247c2d911",
+  "verified_at": "2026-08-28",
+  "llms_sha256": "1f2e479b07265e9bd5b422e00009aa929fe6a8b5f1ff8c74a02a1cd56668bd01",
   "models": [
     {
       "display_name": "Seedream3.0 - Text to Image",
@@ -341,13 +341,26 @@
       }
     },
     {
-      "display_name": "Grok Imagine Image 2.0 Image Edit",
-      "id": "grok-imagine-image-2-0/image-edit",
+      "display_name": "Grok Imagine Image 2.0 Segment Edit",
+      "id": "grok-imagine-image-2-0/segment-edit",
       "kind": "image",
       "output_format": "none",
       "prompt_policy": "required",
       "url_binding": {
         "type": "none"
+      }
+    },
+    {
+      "aspect_ratio_field": "aspect_ratio",
+      "display_name": "Grok Imagine Image 2.0 Image Edit",
+      "id": "grok-imagine-image-2-0/image-edit",
+      "kind": "image",
+      "output_format": "none",
+      "prompt_policy": "optional",
+      "url_binding": {
+        "field": "image_urls",
+        "max_items": 5,
+        "type": "array"
       }
     },
     {

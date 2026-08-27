@@ -125,8 +125,12 @@ silently.
 - Gemini Omni Character returns a `character_id`. Pass it to
   `gemini-omni-video` through `input.character_ids`.
 - Grok Segment Map returns a source `task_id` and numbered masks. Generate the
-  edit with `grok-imagine-image-2-0/image-edit`, then place the selected indexes
-  in `input.mask_indexs`. The field spelling follows Kie's API.
+  targeted edit with `kie_generate_image` and
+  `model: grok-imagine-image-2-0/segment-edit`. Supply the edit prompt, put the
+  returned ID in `input.task_id`, and place the selected indexes in
+  `input.mask_indexs`. The field spelling follows Kie's API. The separate
+  `grok-imagine-image-2-0/image-edit` route edits up to five `image_urls` and
+  does not consume Segment Map task IDs.
 - OmniHuman Subject Detection returns mask URLs and local previews. Pass the
   chosen URLs to `omnihuman-1-5` through `input.mask_url`.
 - OmniHuman Human Identification returns Kie's integer `subject_status` as-is.

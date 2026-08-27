@@ -329,7 +329,7 @@ mod tests {
 
     #[test]
     fn compact_catalog_covers_market_image_video_models() {
-        assert_eq!(model_catalog().len(), 127);
+        assert_eq!(model_catalog().len(), 128);
         assert!(model_catalog().iter().all(|model| !matches!(
             model.id,
             "grok-imagine-image-2-0/segment-map"
@@ -386,6 +386,7 @@ mod tests {
                 "grok-imagine-image-2-0/text-to-image",
                 GenerationKind::Image,
             ),
+            ("grok-imagine-image-2-0/segment-edit", GenerationKind::Image),
             ("grok-imagine-image-2-0/image-edit", GenerationKind::Image),
             ("qwen3/pro-text-to-image", GenerationKind::Image),
             ("qwen3/text-to-image", GenerationKind::Image),
@@ -455,6 +456,23 @@ mod tests {
         );
         assert_eq!(layers.resolution_field, Some("size"));
         assert_eq!(layers.output_format, OutputFormatStyle::Jpeg);
+
+        let segment_edit =
+            resolve_model("grok-imagine-image-2-0/segment-edit", GenerationKind::Image).unwrap();
+        assert_eq!(segment_edit.prompt_policy, PromptPolicy::Required);
+        assert_eq!(segment_edit.url_binding, UrlBinding::None);
+
+        let image_edit =
+            resolve_model("grok-imagine-image-2-0/image-edit", GenerationKind::Image).unwrap();
+        assert_eq!(image_edit.prompt_policy, PromptPolicy::Optional);
+        assert_eq!(
+            image_edit.url_binding,
+            UrlBinding::Array {
+                field: "image_urls",
+                max_items: Some(5),
+            }
+        );
+        assert_eq!(image_edit.aspect_ratio_field, Some("aspect_ratio"));
 
         for id in ["qwen3/pro-image-to-image", "qwen3/image-to-image"] {
             let model = resolve_model(id, GenerationKind::Image).unwrap();
@@ -608,6 +626,7 @@ mod tests {
             vec![
                 "seedream/5-pro-layer-decomposition",
                 "grok-imagine/image-to-image",
+                "grok-imagine-image-2-0/image-edit",
                 "grok-imagine/image-to-video",
                 "grok-imagine-video-1-5-preview",
                 "kling-2.6/motion-control",

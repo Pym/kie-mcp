@@ -33,6 +33,8 @@ use kie_mcp::{
 use serde_json::{Value, json};
 use tempfile::TempDir;
 
+const GROK_SEGMENT_EDIT_MODEL: &str = "grok-imagine-image-2-0/segment-edit";
+
 #[derive(Clone)]
 struct MockState {
     create_payloads: Arc<Mutex<Vec<Value>>>,
@@ -985,6 +987,87 @@ async fn grok_segment_map_returns_indexes_urls_and_local_previews() {
 }
 
 #[tokio::test]
+async fn grok_segment_map_task_and_selected_masks_feed_segment_edit() {
+    let server = MockServer::start_with_result_json(
+        r#"{"resultObject":{"segments_count":2,"segments":[{"maskUrl":"https://kie.example/mask-0.png","name":"background","index":0},{"maskUrl":"https://kie.example/mask-1.png","name":"dog","index":1}]}}"#,
+    )
+    .await;
+    let temp = TempDir::new().unwrap();
+    let client = client_for(&server, temp.path().join("out"));
+
+    let segment_map = client
+        .grok_segment_map(Some("source_task"), None, None, Some("grok-segments"))
+        .await
+        .unwrap();
+    assert_eq!(segment_map.task_id, "task_mock");
+    let selected_index = match &segment_map.output {
+        StructuredTaskOutput::GrokSegmentMap { segments, .. } => segments
+            .iter()
+            .find(|segment| segment.name == "dog")
+            .map(|segment| segment.index)
+            .unwrap(),
+        _ => panic!("expected Grok segment output"),
+    };
+    assert_eq!(selected_index, 1);
+
+    *server.state.result_json.lock().unwrap() = None;
+    let edit = client
+        .generate_and_wait(
+            GenerationRequest {
+                model: GROK_SEGMENT_EDIT_MODEL.to_string(),
+                prompt: "Replace the selected dog with a red fox".to_string(),
+                input_urls: Vec::new(),
+                local_input_paths: Vec::new(),
+                input: json!({
+                    "task_id": segment_map.task_id,
+                    "mask_indexs": [selected_index],
+                }),
+                aspect_ratio: None,
+                resolution: None,
+                output_format: None,
+                output_name: Some("segment-edit".to_string()),
+            },
+            GenerationKind::Image,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(edit.task_id, "task_mock_2");
+    {
+        let payloads = server.state.create_payloads.lock().unwrap();
+        assert_eq!(payloads.len(), 2);
+        assert_eq!(payloads[1]["model"], GROK_SEGMENT_EDIT_MODEL);
+        assert_eq!(
+            payloads[1]["input"]["prompt"],
+            "Replace the selected dog with a red fox"
+        );
+        assert_eq!(payloads[1]["input"]["task_id"], "task_mock");
+        assert_eq!(payloads[1]["input"]["mask_indexs"], json!([1]));
+        assert!(payloads[1]["input"].get("image_urls").is_none());
+    }
+
+    let error = client
+        .create_task(
+            &GenerationRequest {
+                model: GROK_SEGMENT_EDIT_MODEL.to_string(),
+                prompt: "Missing the Segment Map task ID".to_string(),
+                input_urls: Vec::new(),
+                local_input_paths: Vec::new(),
+                input: json!({ "mask_indexs": [1] }),
+                aspect_ratio: None,
+                resolution: None,
+                output_format: None,
+                output_name: None,
+            },
+            GenerationKind::Image,
+        )
+        .await
+        .unwrap_err();
+    assert!(error.to_string().contains("input.task_id is required"));
+    assert_eq!(server.state.create_payloads.lock().unwrap().len(), 2);
+}
+
+#[tokio::test]
 async fn omnihuman_operations_return_raw_status_and_mask_previews() {
     let identification_server = MockServer::start().await;
     let temp = TempDir::new().unwrap();
@@ -1179,6 +1262,10 @@ impl MockServer {
         let app = Router::new()
             .route("/catalog/llms.txt", get(catalog_index))
             .route("/market/google/nanobanana2.md", get(nano_banana_contract))
+            .route(
+                "/market/grok-imagine-image-2-0/image-edit.md",
+                get(grok_segment_edit_contract),
+            )
             .route("/market/kling/kling-3-0.md", get(kling_contract))
             .route("/api/v1/jobs/createTask", post(create_task))
             .route("/api/v1/jobs/recordInfo", get(record_info))
@@ -1218,6 +1305,10 @@ async fn catalog_index() -> &'static str {
 
 async fn nano_banana_contract() -> &'static str {
     include_str!("fixtures/kie_nano_banana_route.md")
+}
+
+async fn grok_segment_edit_contract() -> &'static str {
+    include_str!("fixtures/kie_grok_segment_edit_route.md")
 }
 
 async fn kling_contract() -> &'static str {
