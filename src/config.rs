@@ -1,6 +1,6 @@
 use std::{env, path::PathBuf, time::Duration};
 
-use crate::kie::KieError;
+use crate::kie::{KieError, catalog::CATALOG_SOURCE};
 
 pub const DEFAULT_API_BASE: &str = "https://api.kie.ai";
 pub const DEFAULT_UPLOAD_BASE: &str = "https://kieai.redpandaai.co";
@@ -14,6 +14,7 @@ pub struct Config {
     pub api_key: Option<String>,
     pub api_base: String,
     pub upload_base: String,
+    pub catalog_url: String,
     pub output_dir: PathBuf,
     pub timeout: Duration,
     pub http_timeout: Duration,
@@ -27,6 +28,7 @@ impl Config {
             api_key: env_string("KIE_API_KEY")?.filter(|value| !value.is_empty()),
             api_base: env_base_url("KIE_MCP_API_BASE", DEFAULT_API_BASE)?,
             upload_base: env_base_url("KIE_MCP_UPLOAD_BASE", DEFAULT_UPLOAD_BASE)?,
+            catalog_url: env_base_url("KIE_MCP_CATALOG_URL", CATALOG_SOURCE)?,
             output_dir: env_path("KIE_MCP_OUTPUT_DIR", DEFAULT_OUTPUT_DIR)?,
             timeout: Duration::from_secs(env_positive_u64(
                 "KIE_MCP_TIMEOUT_SECS",

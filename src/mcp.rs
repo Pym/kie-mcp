@@ -13,13 +13,13 @@ use crate::{
     config::Config,
     kie::{
         KieClient, KieError,
-        catalog::{CATALOG_SOURCE, models_for, resolve_model_any_kind},
+        catalog::resolve_model_any_kind,
         jobs::{GenerationKind, GenerationRequest, model_kind, public_status},
         operations::{GeminiOmniVoice, StructuredOperation, StructuredTaskResult},
     },
 };
 
-const SERVER_INSTRUCTIONS: &str = "Generate Kie.ai images and videos, then use the returned local files. Call kie_models to inspect prompt policy and media bindings. Put model-specific fields in input. Use the dedicated Gemini Omni tools to create reusable audio and character IDs. Use Grok Segment Map before a masked Grok Image 2 edit. Use OmniHuman identification or subject detection only when the portrait needs validation or subject selection.";
+const SERVER_INSTRUCTIONS: &str = "Generate Kie.ai images and videos, then use the returned local files. Call kie_models to inspect each model's input_schema, prompt policy, constraints, and media bindings before generation. Put model-specific fields in input. Use the dedicated Gemini Omni tools to create reusable audio and character IDs. Use Grok Segment Map before a masked Grok Image 2 edit. Use OmniHuman identification or subject detection only when the portrait needs validation or subject selection.";
 
 #[derive(Debug, Clone)]
 pub struct KieMcp {
@@ -133,6 +133,11 @@ pub struct ModelsParams {
     #[serde(default)]
     #[schemars(description = "Optional free-text search over ids, display names, and aliases.")]
     pub query: Option<String>,
+    #[serde(default)]
+    #[schemars(
+        description = "Include OpenAPI field descriptions in input_schema. Constraints, required fields, and nested schemas are always included when a live route schema is available."
+    )]
+    pub include_descriptions: bool,
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -241,15 +246,29 @@ impl KieMcp {
     }
 
     #[tool(
-        description = "List Kie.ai Market image/video models known by this MCP, including canonical ids, aliases, simple media input bindings, and convenience fields."
+        description = "List live Kie.ai Market image/video model contracts, including canonical ids, aliases, required input fields, enums, limits, nested schemas, simple media bindings, and convenience fields."
     )]
     async fn kie_models(
         &self,
         Parameters(params): Parameters<ModelsParams>,
     ) -> Result<CallToolResult, McpError> {
-        let models = models_for(params.media_type, params.query.as_deref());
+        let listing = self
+            .client
+            .catalog()
+            .models(
+                params.media_type,
+                params.query.as_deref(),
+                params.include_descriptions,
+            )
+            .await;
+        let models = &listing.models;
         let value = serde_json::to_value(json!({
-            "source": CATALOG_SOURCE,
+            "source": listing.source,
+            "catalog_status": listing.status,
+            "routes_discovered": listing.routes_discovered,
+            "schemas_loaded": listing.schemas_loaded,
+            "schema_failures": listing.schema_failures,
+            "warning": listing.warning,
             "count": models.len(),
             "models": models,
             "specialized_tools": [
@@ -259,7 +278,7 @@ impl KieMcp {
                 "kie_omnihuman_human_identification",
                 "kie_omnihuman_subject_detection"
             ],
-            "note": "Pass display_name, alias, or canonical id to kie_generate_image/kie_generate_video. Model-specific fields that are not listed as convenience fields belong in input. Preprocessing operations use the dedicated tools and are not included in count."
+            "note": "Pass display_name, alias, or canonical id to kie_generate_image/kie_generate_video. Read each model's input_schema before setting model-specific input. Preprocessing operations use dedicated tools and are not included in count."
         }))
         .map_err(to_mcp_error)?;
         let lines = models

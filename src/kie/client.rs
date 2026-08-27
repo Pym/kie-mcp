@@ -58,6 +58,7 @@ const OMNIHUMAN_IMAGE_UPLOAD: ImageUploadPolicy = ImageUploadPolicy {
 pub struct KieClient {
     http: reqwest::Client,
     config: Config,
+    catalog: super::catalog::LiveCatalog,
     upload_cache: Arc<StdMutex<HashMap<UploadCacheKey, UploadedInput>>>,
     upload_locks: Arc<StdMutex<HashMap<UploadCacheKey, Arc<AsyncMutex<()>>>>>,
 }
@@ -79,15 +80,21 @@ struct LocalUpload {
 
 impl KieClient {
     pub fn new(config: Config) -> Self {
+        let catalog = super::catalog::LiveCatalog::new(&config.catalog_url, config.http_timeout);
         Self {
             http: reqwest::Client::builder()
                 .timeout(config.http_timeout)
                 .build()
                 .expect("valid reqwest client configuration"),
             config,
+            catalog,
             upload_cache: Arc::new(StdMutex::new(HashMap::new())),
             upload_locks: Arc::new(StdMutex::new(HashMap::new())),
         }
+    }
+
+    pub fn catalog(&self) -> &super::catalog::LiveCatalog {
+        &self.catalog
     }
 
     pub async fn credits(&self) -> Result<CreditsResponse, KieError> {
@@ -315,10 +322,31 @@ impl KieClient {
                 ),
             });
         }
-        validate_model(&request.model, kind)?;
+        let contract = self
+            .catalog
+            .resolve_contract(&request.model, Some(kind))
+            .await;
+        if contract.is_none() {
+            validate_model(&request.model, kind)?;
+        }
+        if let Some(operation) = contract
+            .as_deref()
+            .and_then(|contract| StructuredOperation::from_model(&contract.id))
+        {
+            return Err(KieError::InvalidRequest {
+                message: format!(
+                    "model {} returns preprocessing data; use {} instead",
+                    operation.model(),
+                    operation.tool_name()
+                ),
+            });
+        }
         let spec = super::catalog::resolve_model(&request.model, kind);
         validate_generation_request(request, spec)?;
-        let model = spec.map_or(request.model.as_str(), |spec| spec.id);
+        let model = contract.as_deref().map_or_else(
+            || spec.map_or(request.model.as_str(), |spec| spec.id),
+            |contract| &contract.id,
+        );
         let mut uploaded = Vec::new();
         if has_explicit_media_input(&request.input)
             && (!request.input_urls.is_empty() || !request.local_input_paths.is_empty())
@@ -327,10 +355,26 @@ impl KieClient {
                 message: "input already contains explicit media fields; use either input media fields or top-level input_urls/local_input_paths, not both".to_string(),
             });
         }
+        if let Some(contract) = contract.as_deref() {
+            let placeholders = request
+                .local_input_paths
+                .iter()
+                .enumerate()
+                .map(|(index, path)| UploadedInput {
+                    path: path.clone(),
+                    url: format!("https://local-input.invalid/{index}"),
+                })
+                .collect::<Vec<_>>();
+            let preview = create_task_payload(request, &placeholders, model, spec)?;
+            contract.validate(&preview["input"])?;
+        }
         for path in &request.local_input_paths {
             uploaded.push(self.upload_file(path).await?);
         }
         let payload = create_task_payload(request, &uploaded, model, spec)?;
+        if let Some(contract) = contract.as_deref() {
+            contract.validate(&payload["input"])?;
+        }
         debug!(model = %model, requested_model = %request.model, "creating Kie task");
         self.post_create_task(&payload).await
     }

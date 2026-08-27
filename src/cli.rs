@@ -50,6 +50,8 @@ struct ModelsArgs {
     media_type: Option<String>,
     #[arg(long)]
     query: Option<String>,
+    #[arg(long)]
+    include_descriptions: bool,
 }
 
 #[derive(Debug, Args)]
@@ -103,10 +105,21 @@ async fn run_debug(command: DebugCommand) -> Result<()> {
                 .as_deref()
                 .map(parse_generation_kind)
                 .transpose()?;
-            let models = crate::kie::catalog::models_for(kind, args.query.as_deref());
+            let listing = client
+                .catalog()
+                .models(kind, args.query.as_deref(), args.include_descriptions)
+                .await;
             println!(
                 "{}",
-                serde_json::to_string_pretty(&serde_json::json!({ "models": models }))?
+                serde_json::to_string_pretty(&serde_json::json!({
+                    "source": listing.source,
+                    "catalog_status": listing.status,
+                    "routes_discovered": listing.routes_discovered,
+                    "schemas_loaded": listing.schemas_loaded,
+                    "schema_failures": listing.schema_failures,
+                    "warning": listing.warning,
+                    "models": listing.models,
+                }))?
             );
         }
         DebugCommand::Create(args) => {
@@ -125,8 +138,14 @@ async fn run_debug(command: DebugCommand) -> Result<()> {
             };
             let kind = match args.media_type.as_deref() {
                 Some(media_type) => parse_generation_kind(media_type)?,
-                None => catalog::resolve_model_any_kind(&request.model)
-                    .map(|spec| spec.kind)
+                None => client
+                    .catalog()
+                    .resolve_contract(&request.model, None)
+                    .await
+                    .map(|contract| contract.kind)
+                    .or_else(|| {
+                        catalog::resolve_model_any_kind(&request.model).map(|spec| spec.kind)
+                    })
                     .or_else(|| model_kind(&request.model))
                     .ok_or_else(|| {
                         anyhow::anyhow!("unsupported or ambiguous model: {}", request.model)

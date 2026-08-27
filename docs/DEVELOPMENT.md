@@ -21,7 +21,9 @@ The public MCP surface stays deliberately small:
 - structured preparation results use dedicated tools instead of pretending to
   be generated media.
 
-Kie remains the source of truth for model-specific validation and pricing.
+Kie's route OpenAPI remains the contract source. The MCP enforces a conservative
+local subset and leaves undocumented or media-dependent checks to Kie. Kie also
+remains the source of truth for pricing.
 
 ## Architecture
 
@@ -29,7 +31,9 @@ Kie remains the source of truth for model-specific validation and pricing.
 | --- | --- |
 | `src/mcp.rs` | Tool schemas, MCP results, and stdio lifecycle. |
 | `src/config.rs` | Environment configuration and startup validation. |
-| `src/kie/catalog.rs` | Model types, lookup, matching, and request-profile helpers. |
+| `src/kie/catalog.rs` | Embedded compatibility profiles, lookup, matching, and request helpers. |
+| `src/kie/catalog/live.rs` | Live index and route downloads, OpenAPI parsing, schema output, and fallback merging. |
+| `src/kie/catalog/validation.rs` | Conservative recursive validation for authoritative downloaded input schemas. |
 | `src/kie/catalog/models.rs` | Data-only model IDs, aliases, media bindings, and common field mappings. |
 | `src/kie/jobs.rs` | Model checks and Kie request assembly. |
 | `src/kie/client.rs` | HTTP calls, uploads, polling, downloads, and error redaction. |
@@ -39,9 +43,12 @@ Kie remains the source of truth for model-specific validation and pricing.
 
 A generation request follows this path:
 
-1. Resolve the requested catalog model and validate image/video kind.
-2. Validate and upload any local reference files.
-3. Merge convenience fields and media URLs into Kie's `input` object.
+1. Resolve the requested model against the live route catalog and embedded
+   compatibility profiles, then validate its image/video kind.
+2. Merge convenience fields and placeholder URLs into a preview input. Validate
+   it against an authoritative downloaded route schema before uploading files.
+3. Validate and upload local reference files, then assemble and validate the
+   final Kie input.
 4. Create one Kie task and poll `recordInfo` until it finishes.
 5. Resolve and download result media into a task-specific directory.
 6. Return structured data plus local Markdown previews.
@@ -56,29 +63,62 @@ or repeated change pressure. File length alone is not a reason to add layers.
 
 ## Model catalog
 
-The embedded catalog is sourced from <https://docs.kie.ai/llms.txt>. Its entries
-live in `src/kie/catalog/models.rs`, separate from matching behavior. It is not a
-copy of Kie's full schemas. Each entry stores only what the MCP needs for model
-selection and common request assembly:
+The runtime catalog starts at <https://docs.kie.ai/llms.txt>. On first use, it
+downloads that index and finds same-origin English Kie Market image and video
+routes. It downloads only the route documents needed by the current model query
+or generation request. An unfiltered `kie_models` call reads all matching routes
+with at most eight requests in flight. Index and route load results stay cached
+for the server process.
 
-- canonical ID, display name, kind, and aliases;
-- whether `prompt` is required, optional, or absent;
-- a simple media URL binding when one exists;
-- common aspect ratio, resolution, and output format mappings.
+Each route page contains an OpenAPI YAML block. The parser resolves local schema
+references and extracts the `input` schema from
+`POST /api/v1/jobs/createTask`. A contract is authoritative for local validation
+only when its `model` schema identifies exactly one model, that ID agrees with
+the route URL, title, or embedded profile, and its `input` is object-shaped.
+This identity check matters because Kie's current catalog contains route pages
+whose singleton model enum names another route. Profile routes such as Gemini
+Omni Audio and Character do not use `createTask`, so the catalog ignores them
+instead of reporting failed schemas.
 
-Catalog refreshes are intentionally manual and can be done in a focused Codex
-session. Compare every image/video entry with its individual Kie OpenAPI page,
-including prompt policy, URL names and cardinalities, before changing the data
-file. Preserve exact-key uniqueness and update
-`tests/fixtures/kie_catalog_contract.json` only after that review. Its regression
-test locks every catalog entry and compact request contract. Do not add full
-model schemas to the binary; uncommon fields belong in `input` and in Kie's own
-documentation.
+`kie_models` returns the recursive input schema. The normal response removes
+examples, descriptions, and `x-*` vendor fields but keeps standard schema
+structure and constraints. `include_descriptions=true` retains descriptions.
+The response labels every entry with `catalog_source` and `schema_status`, and
+the top level reports whether the live load was complete, partial, or replaced
+by the embedded fallback.
 
-The catalog contains final image and video models only. Grok Segment Map and
-the two OmniHuman preparation models live in `operations.rs`, so a caller cannot
-accidentally send them through `kie_generate_image` or `kie_generate_video`.
-Gemini Omni Audio and Character use separate endpoints and are not model entries.
+The validator enforces only constraints that can be checked without inspecting
+remote media:
+
+- JSON types, `const`, enums, and required object fields;
+- string lengths and numeric bounds;
+- array and object size limits, unique array items, nested `items`, and nested
+  `properties`;
+- `additionalProperties` schemas and credible `oneOf` or `anyOf` alternatives.
+
+It leaves formats, regular-expression dialects, `multipleOf`, prose-only rules,
+and generated `allOf` fragments to Kie. The current catalog contains some
+`allOf` fragments whose type contradicts the surrounding object, so enforcing
+them would reject valid requests. These fragments remain visible in
+`input_schema`; the validator does not guess how to repair them.
+
+`src/kie/catalog/models.rs` remains a small embedded compatibility table. It
+stores aliases, prompt policy, simple media bindings, and common convenience
+field mappings. The live contract supplies model discovery and validation; the
+embedded entry supplies stable request construction. If the docs are offline or
+a known route disappears, existing IDs and aliases continue to work without
+schema-backed validation.
+
+Review manual changes to the embedded table against the individual route pages.
+Preserve exact-key uniqueness and update
+`tests/fixtures/kie_catalog_contract.json` only after that review. The snapshot
+test locks every embedded request profile. Do not copy full route schemas into
+the binary.
+
+Grok Segment Map and the two OmniHuman preparation models live in
+`operations.rs`, so a caller cannot send them through `kie_generate_image` or
+`kie_generate_video`. Gemini Omni Audio and Character use separate endpoints
+and are not generation model entries.
 
 ## Configuration reference
 
@@ -87,6 +127,7 @@ Gemini Omni Audio and Character use separate endpoints and are not model entries
 | `KIE_API_KEY` | unset | Required for live API calls. |
 | `KIE_MCP_API_BASE` | `https://api.kie.ai` | Kie task and credit API base URL. |
 | `KIE_MCP_UPLOAD_BASE` | `https://kieai.redpandaai.co` | Kie upload API base URL. |
+| `KIE_MCP_CATALOG_URL` | `https://docs.kie.ai/llms.txt` | Public catalog index; override for tests or a trusted mirror. |
 | `KIE_MCP_OUTPUT_DIR` | `output/kie` | Download root. |
 | `KIE_MCP_TIMEOUT_SECS` | `900` | Overall generation polling deadline. |
 | `KIE_MCP_HTTP_TIMEOUT_SECS` | `300` | Timeout for each HTTP request. |
@@ -106,6 +147,7 @@ The debug commands exercise the same client without MCP:
 
 ```bash
 cargo run -- debug models --media-type image --query banana
+cargo run -- debug models --media-type video --query kling --include-descriptions
 cargo run -- debug credits
 cargo run -- debug upload ./image.png
 cargo run -- debug create --model MODEL_ID --input input.json
@@ -135,15 +177,18 @@ corrupt MCP stdio messages.
 - `kie_task_status` recognizes the three asynchronous preparation models. It
   returns their typed result and downloads masks when `download_if_complete` is
   true.
-- The local catalog can lag behind Kie's availability and capabilities. Raw
-  model IDs are accepted only when their media kind can be inferred safely, and
-  all model-specific fields must then be supplied directly in `input`. Top-level
-  prompt, media, aspect-ratio, resolution, and output-format shortcuts are not
-  guessed for uncataloged models.
+- Live-only model IDs are accepted when their downloaded route establishes the
+  media kind. They require exact model-specific fields in `input` because the
+  embedded table does not provide convenience mappings. If no live contract is
+  available, raw IDs are accepted only when their media kind can be inferred
+  safely. Top-level prompt, media, aspect-ratio, resolution, and output-format
+  shortcuts are never guessed for models without an embedded profile.
 
 ## Verification
 
-Tests are mock-only and do not require `KIE_API_KEY`.
+Tests are mock-only and do not require `KIE_API_KEY`. Catalog tests use local
+`llms.txt` and route Markdown fixtures, including nested object and array
+schemas. They never submit Kie tasks.
 
 ```bash
 cargo fmt --check

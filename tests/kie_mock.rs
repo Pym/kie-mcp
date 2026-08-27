@@ -21,6 +21,7 @@ use kie_mcp::{
     config::Config,
     kie::{
         KieClient, KieError,
+        catalog::CatalogStatus,
         client::redact,
         jobs::{GenerationKind, GenerationRequest},
         operations::{
@@ -203,6 +204,135 @@ async fn image_generation_resolves_human_catalog_alias_and_convenience_input() {
         payload["input"]["image_input"][0],
         format!("{}/input.png", server.base_url)
     );
+}
+
+#[tokio::test]
+async fn live_catalog_exposes_recursive_model_constraints() {
+    let server = MockServer::start().await;
+    let temp = TempDir::new().unwrap();
+    let client = client_for(&server, temp.path().join("out"));
+
+    let listing = client
+        .catalog()
+        .models(Some(GenerationKind::Image), Some("Nano Banana 2"), false)
+        .await;
+
+    assert!(matches!(listing.status, CatalogStatus::Live));
+    assert_eq!(listing.schema_failures, 0);
+    assert_eq!(listing.models.len(), 1);
+    let model = serde_json::to_value(&listing.models[0]).unwrap();
+    assert_eq!(model["id"], "nano-banana-2");
+    assert_eq!(model["catalog_source"], "live_openapi");
+    assert_eq!(model["schema_status"], "authoritative");
+    assert_eq!(model["input_schema"]["required"], json!(["prompt"]));
+    assert_eq!(
+        model["input_schema"]["properties"]["aspect_ratio"]["enum"],
+        json!(["1:1", "4:3", "16:9", "auto"])
+    );
+    assert_eq!(
+        model["input_schema"]["properties"]["image_input"]["maxItems"],
+        14
+    );
+    assert!(
+        model["input_schema"]["properties"]["prompt"]
+            .get("description")
+            .is_none()
+    );
+}
+
+#[tokio::test]
+async fn live_catalog_rejects_invalid_enum_before_task_creation() {
+    let server = MockServer::start().await;
+    let temp = TempDir::new().unwrap();
+    let client = client_for(&server, temp.path().join("out"));
+
+    let error = client
+        .create_task(
+            &GenerationRequest {
+                model: "Nano Banana 2".to_string(),
+                prompt: "test image".to_string(),
+                input_urls: Vec::new(),
+                local_input_paths: Vec::new(),
+                input: json!({}),
+                aspect_ratio: None,
+                resolution: Some("8K".to_string()),
+                output_format: None,
+                output_name: None,
+            },
+            GenerationKind::Image,
+        )
+        .await
+        .unwrap_err();
+
+    assert!(
+        error
+            .to_string()
+            .contains("input.resolution must be one of")
+    );
+    assert!(server.state.create_payloads.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn live_catalog_rejects_invalid_nested_field_before_task_creation() {
+    let server = MockServer::start().await;
+    let temp = TempDir::new().unwrap();
+    let client = client_for(&server, temp.path().join("out"));
+
+    let error = client
+        .create_task(
+            &GenerationRequest {
+                model: "kling-3.0/video".to_string(),
+                prompt: "test video".to_string(),
+                input_urls: Vec::new(),
+                local_input_paths: Vec::new(),
+                input: json!({
+                    "mode": "pro",
+                    "multi_prompt": [{ "prompt": "first shot", "duration": 16 }]
+                }),
+                aspect_ratio: None,
+                resolution: None,
+                output_format: None,
+                output_name: None,
+            },
+            GenerationKind::Video,
+        )
+        .await
+        .unwrap_err();
+
+    assert!(
+        error
+            .to_string()
+            .contains("input.multi_prompt[0].duration must be at most 15")
+    );
+    assert!(server.state.create_payloads.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn live_catalog_rejects_missing_required_field_before_task_creation() {
+    let server = MockServer::start().await;
+    let temp = TempDir::new().unwrap();
+    let client = client_for(&server, temp.path().join("out"));
+
+    let error = client
+        .create_task(
+            &GenerationRequest {
+                model: "kling-3.0/video".to_string(),
+                prompt: "test video".to_string(),
+                input_urls: Vec::new(),
+                local_input_paths: Vec::new(),
+                input: json!({}),
+                aspect_ratio: None,
+                resolution: None,
+                output_format: None,
+                output_name: None,
+            },
+            GenerationKind::Video,
+        )
+        .await
+        .unwrap_err();
+
+    assert!(error.to_string().contains("input.mode is required"));
+    assert!(server.state.create_payloads.lock().unwrap().is_empty());
 }
 
 #[tokio::test]
@@ -983,6 +1113,7 @@ fn config_for(server: &MockServer, output_dir: PathBuf) -> Config {
         api_key: Some("test-secret".to_string()),
         api_base: server.base_url.clone(),
         upload_base: server.base_url.clone(),
+        catalog_url: format!("{}/catalog/llms.txt", server.base_url),
         output_dir,
         timeout: Duration::from_secs(10),
         http_timeout: Duration::from_secs(10),
@@ -1046,6 +1177,9 @@ impl MockServer {
             record_count: Arc::new(AtomicUsize::new(0)),
         };
         let app = Router::new()
+            .route("/catalog/llms.txt", get(catalog_index))
+            .route("/market/google/nanobanana2.md", get(nano_banana_contract))
+            .route("/market/kling/kling-3-0.md", get(kling_contract))
             .route("/api/v1/jobs/createTask", post(create_task))
             .route("/api/v1/jobs/recordInfo", get(record_info))
             .route("/api/v1/omni/audio/create", post(create_omni_audio))
@@ -1076,6 +1210,18 @@ impl MockServer {
             state,
         }
     }
+}
+
+async fn catalog_index() -> &'static str {
+    include_str!("fixtures/kie_catalog_index.txt")
+}
+
+async fn nano_banana_contract() -> &'static str {
+    include_str!("fixtures/kie_nano_banana_route.md")
+}
+
+async fn kling_contract() -> &'static str {
+    include_str!("fixtures/kie_kling_route.md")
 }
 
 async fn create_task(

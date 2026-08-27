@@ -17,6 +17,7 @@ async fn stdio_server_lists_kie_tools() {
         "KIE_API_KEY",
         "KIE_MCP_API_BASE",
         "KIE_MCP_UPLOAD_BASE",
+        "KIE_MCP_CATALOG_URL",
         "KIE_MCP_OUTPUT_DIR",
         "KIE_MCP_TIMEOUT_SECS",
         "KIE_MCP_HTTP_TIMEOUT_SECS",
@@ -115,6 +116,17 @@ async fn stdio_server_lists_kie_tools() {
         .expect("tool schema should list required fields");
     assert!(required.iter().any(|field| field == "model"));
     assert!(!required.iter().any(|field| field == "prompt"));
+
+    let models_tool = tools["result"]["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|tool| tool["name"] == "kie_models")
+        .unwrap();
+    assert_eq!(
+        models_tool["inputSchema"]["properties"]["include_descriptions"]["type"],
+        "boolean"
+    );
 
     let audio_tool = tools["result"]["tools"]
         .as_array()

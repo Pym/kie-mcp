@@ -2,7 +2,11 @@ use serde::{Serialize, Serializer};
 
 use super::jobs::GenerationKind;
 
+mod live;
 mod models;
+mod validation;
+
+pub use live::{CatalogListing, CatalogStatus, LiveCatalog, ModelContract};
 
 pub const CATALOG_SOURCE: &str = "https://docs.kie.ai/llms.txt";
 

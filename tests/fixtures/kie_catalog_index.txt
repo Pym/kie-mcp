@@ -1,0 +1,6 @@
+# docs.kie.ai
+
+## API Docs
+- Image Models > Google [Google - Nano Banana 2](/market/google/nanobanana2.md): Image generation by Nano Banana 2
+- Video Models > Kling [Kling 3.0](/market/kling/kling-3-0.md): Video generation by Kling 3.0
+- Music Models > Example [Example Audio](/market/example/audio.md): This route is outside kie-mcp's media scope

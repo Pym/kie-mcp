@@ -77,7 +77,7 @@ five handle model-specific preparation:
 | --- | --- |
 | `kie_generate_image` | Generate or edit an image and download it locally. |
 | `kie_generate_video` | Generate a video and download it locally. |
-| `kie_models` | Find supported model IDs, aliases, and common inputs. |
+| `kie_models` | Find live model IDs, aliases, nested inputs, and constraints. |
 | `kie_gemini_omni_create_audio_profile` | Create an audio profile ID for Gemini Omni Video. |
 | `kie_gemini_omni_create_character` | Create a character ID for Gemini Omni Video. |
 | `kie_grok_image_2_segment_map` | Find Grok Image 2 segments and download their masks. |
@@ -92,6 +92,22 @@ fields such as `aspect_ratio`, `resolution`, and `output_format`. `kie_models`
 reports whether each model requires, optionally accepts, or does not use a
 prompt. A legacy prompt supplied to a promptless model is not forwarded to Kie.
 Model-specific Kie fields go in `input`.
+
+`kie_models` reads Kie's current `llms.txt` index and the OpenAPI document for
+each matching image or video route. Every live model entry includes an
+`input_schema` with recursive properties, required fields, enums, defaults,
+types, and documented limits. Set `include_descriptions` to `true` when field
+descriptions are also useful. By default, the response omits descriptions and
+examples to keep broad catalog searches compact.
+
+Before uploading local files or creating a task, the generation tools validate
+the assembled `input` against unambiguous constraints in an authoritative live
+route schema. This catches invalid enum values, missing required fields, wrong
+types, and length, numeric, object, or array bounds locally. Kie still performs
+the final validation because some cross-field and media rules exist only in
+prose or cannot be checked without reading the remote media. If the public docs
+are unavailable or a route lacks a usable OpenAPI contract, the server keeps the
+embedded compatibility entry and skips schema-backed validation for that model.
 
 For reference media, pass public URLs through `input_urls` or local image/video
 files through `local_input_paths`. Local files are uploaded automatically. These
@@ -129,6 +145,7 @@ directory, and successful calls return absolute paths that the agent can reuse.
 | `KIE_MCP_TIMEOUT_SECS` | `900` | Maximum generation wait time. |
 | `KIE_MCP_MAX_UPLOAD_BYTES` | `536870912` | Maximum local upload size. |
 | `KIE_MCP_INPUT_ROOTS` | unset | Optional allowlist of local upload directories. |
+| `KIE_MCP_CATALOG_URL` | `https://docs.kie.ai/llms.txt` | Model catalog index, mainly useful for local fixtures and mirrors. |
 
 Advanced endpoints, HTTP timeouts, debug commands, architecture, and known
 limitations are documented in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
@@ -136,6 +153,8 @@ limitations are documented in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 ## Cost and privacy
 
 - Generation and preparation calls can consume Kie credits.
+- Catalog discovery uses unauthenticated requests to `docs.kie.ai` and does not
+  consume Kie credits.
 - Prompts, model inputs, URLs, and uploaded files are sent to Kie.
 - Generated files remain on disk until you remove them.
 - Keep API keys, signed URLs, and sensitive output directories private.
