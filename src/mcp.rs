@@ -246,7 +246,7 @@ impl KieMcp {
     }
 
     #[tool(
-        description = "List live Kie.ai Market image/video model contracts, including canonical ids, aliases, required input fields, enums, limits, nested schemas, simple media bindings, and convenience fields."
+        description = "List live Kie.ai Market image/video model contracts, including canonical ids, aliases, required input fields, enums, limits, nested schemas, simple media bindings, convenience fields, schema authority, and warnings for self-contradictory upstream contracts."
     )]
     async fn kie_models(
         &self,

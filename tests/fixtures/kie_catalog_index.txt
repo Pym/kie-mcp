@@ -4,4 +4,6 @@
 - Image Models > Google [Google - Nano Banana 2](/market/google/nanobanana2.md): Image generation by Nano Banana 2
 - Image Models > Grok [Grok Imagine Image 2.0 Segment Edit](/market/grok-imagine-image-2-0/image-edit.md): Targeted editing with a Segment Map task
 - Video Models > Kling [Kling 3.0](/market/kling/kling-3-0.md): Video generation by Kling 3.0
+- Video Models > Wan [Wan 3.0 - Video](/market/wan/3-0-video.md): Multimodal video generation by Wan 3.0
+- Video Models > OmniHuman [Omnihuman 1.5](/market/omnihuman-1-5.md): Audio-driven portrait animation
 - Music Models > Example [Example Audio](/market/example/audio.md): This route is outside kie-mcp's media scope

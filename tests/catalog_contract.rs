@@ -14,7 +14,7 @@ fn embedded_catalog_matches_reviewed_kie_contract_snapshot() {
         snapshot["llms_sha256"],
         "1f2e479b07265e9bd5b422e00009aa929fe6a8b5f1ff8c74a02a1cd56668bd01"
     );
-    assert_eq!(snapshot["models"].as_array().unwrap().len(), 128);
+    assert_eq!(snapshot["models"].as_array().unwrap().len(), 130);
     assert_eq!(
         snapshot["models"], actual,
         "catalog metadata changed: review the corresponding KIE model pages before updating \

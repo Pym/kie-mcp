@@ -114,6 +114,8 @@ pub(super) static MODELS: &[ModelSpec] = &[
     model("wan/2-7-image-to-video", "Wan 2.7 - Image to Video", V, profile(ufr(), NO_FIELD, RES, OF_NONE), &[]),
     model("wan/2-7-videoedit", "Wan 2.7 - Video Edit", V, optional_prompt(profile(us("video_url"), AR, RES, OF_NONE)), &[]),
     model("wan/2-7-r2v", "Wan 2.7 - Reference to Video", V, profile(un(), AR, RES, OF_NONE), &[]),
+    model("wan/3-0-video", "Wan 3.0 - Video", V, optional_prompt(profile(un(), AR, RES, OF_NONE)), &[]),
+    model("wan/3-0-video-prime", "Wan 3.0 - Video Prime", V, optional_prompt(profile(un(), AR, RES, OF_NONE)), &[]),
     model("topaz/video-upscale", "Topaz - Video Upscale", V, no_prompt(profile(us("video_url"), NO_FIELD, NO_FIELD, OF_NONE)), &[]),
     model("infinitalk/from-audio", "Infinitalk - From Audio", V, profile(un(), NO_FIELD, RES, OF_NONE), &[]),
     model("pixverse-v6/text-to-video", "PixVerse V6 Text-to-Video", V, profile(un(), AR, QUALITY, OF_NONE), &[]),

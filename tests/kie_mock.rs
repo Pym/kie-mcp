@@ -243,6 +243,122 @@ async fn live_catalog_exposes_recursive_model_constraints() {
 }
 
 #[tokio::test]
+async fn contradictory_live_schema_is_informational_and_accepts_its_documented_wan_input() {
+    let server = MockServer::start().await;
+    let temp = TempDir::new().unwrap();
+    let client = client_for(&server, temp.path().join("out"));
+
+    let listing = client
+        .catalog()
+        .models(Some(GenerationKind::Video), Some("wan/3-0-video"), false)
+        .await;
+    assert!(matches!(listing.status, CatalogStatus::Live));
+    assert_eq!(listing.models.len(), 1);
+    let model = serde_json::to_value(&listing.models[0]).unwrap();
+    assert_eq!(model["id"], "wan/3-0-video");
+    assert_eq!(model["schema_status"], "informational");
+    assert!(
+        model["schema_warning"]
+            .as_str()
+            .is_some_and(|warning| warning.contains("input.first_frame_url must be object"))
+    );
+
+    client
+        .create_task(
+            &GenerationRequest {
+                model: "wan/3-0-video".to_string(),
+                prompt: "Animate this portrait".to_string(),
+                input_urls: Vec::new(),
+                local_input_paths: Vec::new(),
+                input: json!({
+                    "first_frame_url": "https://example.test/portrait.png"
+                }),
+                aspect_ratio: Some("adaptive".to_string()),
+                resolution: Some("720P".to_string()),
+                output_format: None,
+                output_name: None,
+            },
+            GenerationKind::Video,
+        )
+        .await
+        .unwrap();
+
+    let payloads = server.state.create_payloads.lock().unwrap();
+    assert_eq!(payloads.len(), 1);
+    assert_eq!(payloads[0]["model"], "wan/3-0-video");
+    assert_eq!(
+        payloads[0]["input"]["first_frame_url"],
+        "https://example.test/portrait.png"
+    );
+    assert_eq!(payloads[0]["input"]["prompt"], "Animate this portrait");
+    assert_eq!(payloads[0]["input"]["aspect_ratio"], "adaptive");
+    assert_eq!(payloads[0]["input"]["resolution"], "720P");
+}
+
+#[tokio::test]
+async fn omnihuman_prompt_follows_the_published_300_character_schema_limit() {
+    let server = MockServer::start().await;
+    let temp = TempDir::new().unwrap();
+    let client = client_for(&server, temp.path().join("out"));
+    let base_input = || {
+        json!({
+            "image_url": "https://example.test/portrait.png",
+            "audio_url": "https://example.test/voice.mp3"
+        })
+    };
+
+    client
+        .create_task(
+            &GenerationRequest {
+                model: "omnihuman-1-5".to_string(),
+                prompt: "a".repeat(300),
+                input_urls: Vec::new(),
+                local_input_paths: Vec::new(),
+                input: base_input(),
+                aspect_ratio: None,
+                resolution: Some("1080".to_string()),
+                output_format: None,
+                output_name: None,
+            },
+            GenerationKind::Video,
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        server.state.create_payloads.lock().unwrap()[0]["input"]["prompt"]
+            .as_str()
+            .unwrap()
+            .chars()
+            .count(),
+        300
+    );
+
+    let error = client
+        .create_task(
+            &GenerationRequest {
+                model: "omnihuman-1-5".to_string(),
+                prompt: "a".repeat(301),
+                input_urls: Vec::new(),
+                local_input_paths: Vec::new(),
+                input: base_input(),
+                aspect_ratio: None,
+                resolution: Some("1080".to_string()),
+                output_format: None,
+                output_name: None,
+            },
+            GenerationKind::Video,
+        )
+        .await
+        .unwrap_err();
+    assert!(
+        error
+            .to_string()
+            .contains("input.prompt must contain at most 300 character(s), got 301")
+    );
+    assert_eq!(server.state.create_payloads.lock().unwrap().len(), 1);
+}
+
+#[tokio::test]
 async fn live_catalog_rejects_invalid_enum_before_task_creation() {
     let server = MockServer::start().await;
     let temp = TempDir::new().unwrap();
@@ -1065,6 +1181,33 @@ async fn grok_segment_map_task_and_selected_masks_feed_segment_edit() {
         .unwrap_err();
     assert!(error.to_string().contains("input.task_id is required"));
     assert_eq!(server.state.create_payloads.lock().unwrap().len(), 2);
+
+    let error = client
+        .create_task(
+            &GenerationRequest {
+                model: GROK_SEGMENT_EDIT_MODEL.to_string(),
+                prompt: "Try the zero-based Segment Map index".to_string(),
+                input_urls: Vec::new(),
+                local_input_paths: Vec::new(),
+                input: json!({
+                    "task_id": "task_mock",
+                    "mask_indexs": [0]
+                }),
+                aspect_ratio: None,
+                resolution: None,
+                output_format: None,
+                output_name: None,
+            },
+            GenerationKind::Image,
+        )
+        .await
+        .unwrap_err();
+    assert!(
+        error
+            .to_string()
+            .contains("input.mask_indexs[0] must be at least 1, got 0")
+    );
+    assert_eq!(server.state.create_payloads.lock().unwrap().len(), 2);
 }
 
 #[tokio::test]
@@ -1267,6 +1410,8 @@ impl MockServer {
                 get(grok_segment_edit_contract),
             )
             .route("/market/kling/kling-3-0.md", get(kling_contract))
+            .route("/market/wan/3-0-video.md", get(wan_3_contract))
+            .route("/market/omnihuman-1-5.md", get(omnihuman_contract))
             .route("/api/v1/jobs/createTask", post(create_task))
             .route("/api/v1/jobs/recordInfo", get(record_info))
             .route("/api/v1/omni/audio/create", post(create_omni_audio))
@@ -1313,6 +1458,14 @@ async fn grok_segment_edit_contract() -> &'static str {
 
 async fn kling_contract() -> &'static str {
     include_str!("fixtures/kie_kling_route.md")
+}
+
+async fn wan_3_contract() -> &'static str {
+    include_str!("fixtures/kie_wan_3_route.md")
+}
+
+async fn omnihuman_contract() -> &'static str {
+    include_str!("fixtures/kie_omnihuman_route.md")
 }
 
 async fn create_task(

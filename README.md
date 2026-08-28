@@ -108,6 +108,11 @@ the final validation because some cross-field and media rules exist only in
 prose or cannot be checked without reading the remote media. If the public docs
 are unavailable or a route lacks a usable OpenAPI contract, the server keeps the
 embedded compatibility entry and skips schema-backed validation for that model.
+The same safeguard applies when Kie's own documented request example fails
+against the schema on that route: `kie_models` reports
+`schema_status: informational` plus a `schema_warning`, preserves the schema for
+inspection, and leaves final validation to Kie instead of rejecting the
+documented request locally.
 
 For reference media, pass public URLs through `input_urls` or local image/video
 files through `local_input_paths`. Local files are uploaded automatically. These

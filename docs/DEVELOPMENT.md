@@ -74,18 +74,22 @@ Each route page contains an OpenAPI YAML block. The parser resolves local schema
 references and extracts the `input` schema from
 `POST /api/v1/jobs/createTask`. A contract is authoritative for local validation
 only when its `model` schema identifies exactly one model, that ID agrees with
-the route URL, title, or embedded profile, and its `input` is object-shaped.
-This identity check matters because Kie's current catalog contains route pages
-whose singleton model enum names another route. Profile routes such as Gemini
-Omni Audio and Character do not use `createTask`, so the catalog ignores them
-instead of reporting failed schemas.
+the route URL, title, or embedded profile, its `input` is object-shaped, and the
+route's own request examples validate against that input schema. This check
+matters because Kie's current catalog contains both route pages whose singleton
+model enum names another route and schemas whose URL examples contradict their
+declared object types. A self-contradictory contract remains visible with
+`schema_status: informational` and a `schema_warning`, but cannot reject a task
+locally. Profile routes such as Gemini Omni Audio and Character do not use
+`createTask`, so the catalog ignores them instead of reporting failed schemas.
 
 `kie_models` returns the recursive input schema. The normal response removes
 examples, descriptions, and `x-*` vendor fields but keeps standard schema
 structure and constraints. `include_descriptions=true` retains descriptions.
 The response labels every entry with `catalog_source` and `schema_status`, and
-the top level reports whether the live load was complete, partial, or replaced
-by the embedded fallback.
+adds `schema_warning` when a live contract is informational. The top level
+reports whether the live load was complete, partial, or replaced by the
+embedded fallback.
 
 The validator enforces only constraints that can be checked without inspecting
 remote media:

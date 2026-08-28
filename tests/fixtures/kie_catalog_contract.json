@@ -1333,6 +1333,30 @@
       }
     },
     {
+      "aspect_ratio_field": "aspect_ratio",
+      "display_name": "Wan 3.0 - Video",
+      "id": "wan/3-0-video",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "optional",
+      "resolution_field": "resolution",
+      "url_binding": {
+        "type": "none"
+      }
+    },
+    {
+      "aspect_ratio_field": "aspect_ratio",
+      "display_name": "Wan 3.0 - Video Prime",
+      "id": "wan/3-0-video-prime",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "optional",
+      "resolution_field": "resolution",
+      "url_binding": {
+        "type": "none"
+      }
+    },
+    {
       "display_name": "Topaz - Video Upscale",
       "id": "topaz/video-upscale",
       "kind": "video",

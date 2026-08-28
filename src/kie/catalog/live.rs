@@ -64,6 +64,7 @@ pub struct ModelContract {
     pub kind: GenerationKind,
     pub documentation_url: String,
     pub authoritative: bool,
+    pub schema_warning: Option<String>,
     order: usize,
     input_schema: Value,
 }
@@ -86,6 +87,8 @@ pub struct CatalogEntry {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub documentation_url: Option<String>,
     pub schema_status: SchemaStatus,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub schema_warning: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub input_schema: Option<Value>,
 }
@@ -456,6 +459,7 @@ impl CatalogEntry {
             catalog_source: CatalogEntrySource::EmbeddedFallback,
             documentation_url: None,
             schema_status: SchemaStatus::Unavailable,
+            schema_warning: None,
             input_schema: None,
         }
     }
@@ -505,6 +509,7 @@ impl CatalogEntry {
             } else {
                 SchemaStatus::Informational
             },
+            schema_warning: contract.schema_warning.clone(),
             input_schema: Some(contract.schema_for_output(include_descriptions)),
         }
     }
@@ -774,15 +779,61 @@ fn parse_route_contract(
         return Err("createTask input schema is not object-shaped".to_string());
     }
 
+    let mut schema_warnings = Vec::new();
+    if !model_is_exact {
+        schema_warnings.push(
+            "model ID is inferred from a default instead of an exact enum or const".to_string(),
+        );
+    }
+    if let Some(warning) = documented_example_warning(&document, media, &input_schema) {
+        schema_warnings.push(warning);
+    }
+    let schema_warning = (!schema_warnings.is_empty()).then(|| schema_warnings.join("; "));
+
     Ok(Some(ModelContract {
         id,
         display_name: route.display_name.clone(),
         kind: route.kind,
         documentation_url: route.url.as_str().to_string(),
-        authoritative: model_is_exact && input_is_object,
+        authoritative: schema_warning.is_none(),
+        schema_warning,
         order: route.order,
         input_schema,
     }))
+}
+
+fn documented_example_warning(
+    document: &Value,
+    media: &Value,
+    input_schema: &Value,
+) -> Option<String> {
+    let direct = media
+        .get("example")
+        .and_then(|example| example.get("input"))
+        .map(|input| ("default".to_string(), input.clone()));
+    let named = media
+        .get("examples")
+        .and_then(Value::as_object)
+        .into_iter()
+        .flat_map(|examples| examples.iter())
+        .filter_map(|(name, example)| {
+            let example = dereference(document, example, &mut Vec::new());
+            example
+                .get("value")
+                .unwrap_or(&example)
+                .get("input")
+                .map(|input| (name.clone(), input.clone()))
+        });
+
+    direct.into_iter().chain(named).find_map(|(name, input)| {
+        validation::validate_input(input_schema, &input)
+            .err()
+            .map(|message| {
+                format!(
+                    "documented request example `{name}` contradicts the input schema: {message}"
+                )
+            })
+    })
 }
 
 fn extract_openapi_yaml(markdown: &str) -> Option<&str> {
@@ -1050,6 +1101,41 @@ components:
 ```
 "#;
 
+    const ROUTE_WITH_CONTRADICTORY_EXAMPLE: &str = r#"
+# Example
+
+## OpenAPI Specification
+
+```yaml
+openapi: 3.0.1
+paths:
+  /api/v1/jobs/createTask:
+    post:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [model, input]
+              properties:
+                model:
+                  type: string
+                  enum: [example/image]
+                input:
+                  type: object
+                  properties:
+                    first_frame_url:
+                      type: object
+                      properties: {}
+            examples:
+              first-frame:
+                value:
+                  model: example/image
+                  input:
+                    first_frame_url: https://example.test/frame.png
+```
+"#;
+
     #[test]
     fn index_keeps_only_same_origin_market_image_and_video_routes() {
         let source = Url::parse("https://docs.example.test/llms.txt").unwrap();
@@ -1126,6 +1212,7 @@ components:
             kind: GenerationKind::Image,
             documentation_url: "https://docs.example.test/model.md".to_string(),
             authoritative: false,
+            schema_warning: Some("test warning".to_string()),
             order: 0,
             input_schema: json!({
                 "type": "object",
@@ -1136,6 +1223,32 @@ components:
         };
 
         assert!(contract.validate(&json!({ "mode": "unknown" })).is_ok());
+    }
+
+    #[test]
+    fn route_parser_downgrades_a_schema_rejected_by_its_own_example() {
+        let route = RouteIndex {
+            order: 0,
+            display_name: "Example Image".to_string(),
+            kind: GenerationKind::Image,
+            url: Url::parse("https://docs.example.test/market/example-image.md").unwrap(),
+        };
+        let contract = parse_route_contract(&route, ROUTE_WITH_CONTRADICTORY_EXAMPLE)
+            .unwrap()
+            .unwrap();
+
+        assert!(!contract.authoritative);
+        assert!(
+            contract
+                .schema_warning
+                .as_deref()
+                .is_some_and(|warning| warning.contains("input.first_frame_url must be object"))
+        );
+        assert!(
+            contract
+                .validate(&json!({ "first_frame_url": "https://example.test/frame.png" }))
+                .is_ok()
+        );
     }
 
     #[test]

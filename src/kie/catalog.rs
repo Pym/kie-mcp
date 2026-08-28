@@ -329,7 +329,7 @@ mod tests {
 
     #[test]
     fn compact_catalog_covers_market_image_video_models() {
-        assert_eq!(model_catalog().len(), 128);
+        assert_eq!(model_catalog().len(), 130);
         assert!(model_catalog().iter().all(|model| !matches!(
             model.id,
             "grok-imagine-image-2-0/segment-map"
@@ -397,6 +397,8 @@ mod tests {
             ("kling-3.0-omni/image-to-video", GenerationKind::Video),
             ("kling-3.0-omni/text-to-video", GenerationKind::Video),
             ("bytedance/seedance-2-5", GenerationKind::Video),
+            ("wan/3-0-video", GenerationKind::Video),
+            ("wan/3-0-video-prime", GenerationKind::Video),
             ("minimax-h3/text-to-video", GenerationKind::Video),
             ("minimax-h3/image-to-video", GenerationKind::Video),
             ("minimax-h3/reference-to-video", GenerationKind::Video),
@@ -523,6 +525,14 @@ mod tests {
             let model = resolve_model(id, GenerationKind::Video).unwrap();
             assert_eq!(model.url_binding, UrlBinding::None, "{id}");
         }
+
+        for id in ["wan/3-0-video", "wan/3-0-video-prime"] {
+            let model = resolve_model(id, GenerationKind::Video).unwrap();
+            assert_eq!(model.prompt_policy, PromptPolicy::Optional, "{id}");
+            assert_eq!(model.url_binding, UrlBinding::None, "{id}");
+            assert_eq!(model.aspect_ratio_field, Some("aspect_ratio"), "{id}");
+            assert_eq!(model.resolution_field, Some("resolution"), "{id}");
+        }
     }
 
     #[test]
@@ -633,6 +643,8 @@ mod tests {
                 "kling-3.0/motion-control",
                 "bytedance/seedance-2-5",
                 "wan/2-7-videoedit",
+                "wan/3-0-video",
+                "wan/3-0-video-prime",
                 "happyhorse/image-to-video",
                 "happyhorse-1-1/image-to-video",
                 "omnihuman-1-5",
