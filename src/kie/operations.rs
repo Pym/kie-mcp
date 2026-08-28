@@ -135,7 +135,10 @@ impl StructuredTaskResult {
                 segments_count,
                 segments,
             } => {
-                let mut lines = vec![format!("Grok found {segments_count} segments.")];
+                let mut lines = vec![
+                    format!("Grok found {segments_count} segments."),
+                    "Kie's current Segment Edit schema accepts selected indexes of 1 or greater; index 0 cannot be sent to Segment Edit.".to_string(),
+                ];
                 for segment in segments {
                     lines.push(format!(
                         "Segment {}: {}",
@@ -343,6 +346,12 @@ mod tests {
                 .as_str()
                 .unwrap()
                 .contains("Segment 0: dog")
+        );
+        assert!(
+            value["markdown"]
+                .as_str()
+                .unwrap()
+                .contains("indexes of 1 or greater")
         );
     }
 

@@ -290,13 +290,18 @@ impl KieMcp {
                 } else {
                     convenience.join(", ")
                 };
+                let schema = model.schema_warning.as_deref().map_or_else(
+                    || model.schema_summary().to_string(),
+                    |warning| format!("{} ({warning})", model.schema_summary()),
+                );
                 format!(
-                    "- {} (`{}`): prompt {}, input {}, convenience {}",
+                    "- {} (`{}`): prompt {}, input {}, convenience {}, schema {}",
                     model.display_name,
                     model.id,
                     model.prompt_summary(),
                     model.input_summary(),
-                    convenience
+                    convenience,
+                    schema
                 )
             })
             .collect::<Vec<_>>();
@@ -372,7 +377,7 @@ impl KieMcp {
     }
 
     #[tool(
-        description = "Build a Grok Image 2 segment map from an existing task or one image. Returns a new task_id, named segment indexes, mask URLs, and local previews. Pass that task_id and the selected indexes as input.task_id and input.mask_indexs to kie_generate_image with model grok-imagine-image-2-0/segment-edit and a prompt."
+        description = "Build a Grok Image 2 segment map from an existing task or one image. Returns a new task_id, named segment indexes, mask URLs, and local previews. Pass that task_id and selected indexes of 1 or greater as input.task_id and input.mask_indexs to kie_generate_image with model grok-imagine-image-2-0/segment-edit and a prompt. Kie's current Segment Edit schema rejects index 0 even though Segment Map can return it."
     )]
     async fn kie_grok_image_2_segment_map(
         &self,

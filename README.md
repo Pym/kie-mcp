@@ -132,10 +132,11 @@ silently.
 - Grok Segment Map returns a source `task_id` and numbered masks. Generate the
   targeted edit with `kie_generate_image` and
   `model: grok-imagine-image-2-0/segment-edit`. Supply the edit prompt, put the
-  returned ID in `input.task_id`, and place the selected indexes in
-  `input.mask_indexs`. The field spelling follows Kie's API. The separate
-  `grok-imagine-image-2-0/image-edit` route edits up to five `image_urls` and
-  does not consume Segment Map task IDs.
+  returned ID in `input.task_id`, and place selected indexes of `1` or greater
+  in `input.mask_indexs`. Kie's current Segment Edit schema rejects index `0`
+  even though Segment Map can return it. The field spelling follows Kie's API.
+  The separate `grok-imagine-image-2-0/image-edit` route edits up to five
+  `image_urls` and does not consume Segment Map task IDs.
 - OmniHuman Subject Detection returns mask URLs and local previews. Pass the
   chosen URLs to `omnihuman-1-5` through `input.mask_url`.
 - OmniHuman Human Identification returns Kie's integer `subject_status` as-is.

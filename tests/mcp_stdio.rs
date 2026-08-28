@@ -35,7 +35,8 @@ async fn stdio_server_lists_kie_tools() {
         .arg("serve")
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::null());
+        .stderr(std::process::Stdio::null())
+        .kill_on_drop(true);
     for name in [
         "KIE_API_KEY",
         "KIE_MCP_API_BASE",
@@ -185,6 +186,10 @@ async fn stdio_server_lists_kie_tools() {
         "{segment_description}"
     );
     assert!(
+        segment_description.contains("index 0"),
+        "{segment_description}"
+    );
+    assert!(
         !segment_description.contains("with grok-imagine-image-2-0/image-edit"),
         "{segment_description}"
     );
@@ -209,6 +214,8 @@ async fn task_status_recovers_structured_results_and_optionally_downloads_masks(
         media_downloads: Arc::new(AtomicUsize::new(0)),
     };
     let app = Router::new()
+        .route("/llms.txt", get(mcp_catalog_index))
+        .route("/market/wan/3-0-video.md", get(mcp_wan_contract))
         .route("/api/v1/jobs/recordInfo", get(structured_record_info))
         .route("/api/v1/common/download-url", post(resolve_mask_url))
         .route("/media/mask.png", get(download_mask))
@@ -232,7 +239,8 @@ async fn task_status_recovers_structured_results_and_optionally_downloads_masks(
         .arg("serve")
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::null());
+        .stderr(std::process::Stdio::null())
+        .kill_on_drop(true);
     for name in [
         "KIE_API_KEY",
         "KIE_MCP_API_BASE",
@@ -291,6 +299,36 @@ async fn task_status_recovers_structured_results_and_optionally_downloads_masks(
             "id": 2,
             "method": "tools/call",
             "params": {
+                "name": "kie_models",
+                "arguments": {
+                    "media_type": "video",
+                    "query": "wan/3-0-video",
+                    "include_descriptions": false
+                }
+            }
+        }),
+    )
+    .await;
+    let models = read_response(&mut reader).await;
+    assert_eq!(models["id"], 2);
+    let structured = &models["result"]["structuredContent"];
+    assert_eq!(structured["models"][0]["schema_status"], "informational");
+    assert!(
+        structured["models"][0]["schema_warning"]
+            .as_str()
+            .is_some_and(|warning| warning.contains("first_frame_url must be object"))
+    );
+    let text = models["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(text.contains("schema informational"), "{text}");
+    assert!(text.contains("first_frame_url must be object"), "{text}");
+
+    send(
+        &mut stdin,
+        json!({
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "tools/call",
+            "params": {
                 "name": "kie_task_status",
                 "arguments": {
                     "task_id": "segment_task",
@@ -301,6 +339,7 @@ async fn task_status_recovers_structured_results_and_optionally_downloads_masks(
     )
     .await;
     let without_download = read_response(&mut reader).await;
+    assert_eq!(without_download["id"], 3);
     let structured = &without_download["result"]["structuredContent"];
     assert_eq!(structured["task_id"], "segment_task");
     assert_eq!(structured["model"], "grok-imagine-image-2-0/segment-map");
@@ -313,7 +352,7 @@ async fn task_status_recovers_structured_results_and_optionally_downloads_masks(
         &mut stdin,
         json!({
             "jsonrpc": "2.0",
-            "id": 3,
+            "id": 4,
             "method": "tools/call",
             "params": {
                 "name": "kie_task_status",
@@ -327,6 +366,7 @@ async fn task_status_recovers_structured_results_and_optionally_downloads_masks(
     )
     .await;
     let with_download = read_response(&mut reader).await;
+    assert_eq!(with_download["id"], 4);
     let structured = &with_download["result"]["structuredContent"];
     let local_path = structured["segments"][0]["local_path"]
         .as_str()
@@ -336,6 +376,14 @@ async fn task_status_recovers_structured_results_and_optionally_downloads_masks(
     assert_eq!(state.media_downloads.load(Ordering::SeqCst), 1);
 
     child.kill().await.unwrap();
+}
+
+async fn mcp_catalog_index() -> &'static str {
+    include_str!("fixtures/kie_catalog_index.txt")
+}
+
+async fn mcp_wan_contract() -> &'static str {
+    include_str!("fixtures/kie_wan_3_route.md")
 }
 
 async fn structured_record_info(Query(query): Query<HashMap<String, String>>) -> impl IntoResponse {

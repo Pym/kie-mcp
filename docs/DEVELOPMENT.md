@@ -129,6 +129,9 @@ Grok Segment Edit is a normal image generation route. It consumes the new
 `input`, and uses the canonical model ID
 `grok-imagine-image-2-0/segment-edit`. Do not confuse it with the separate
 `grok-imagine-image-2-0/image-edit` route, whose media input is `image_urls`.
+The current Segment Edit schema sets the mask-index minimum to `1`, although
+Segment Map can return index `0`. The MCP keeps that upstream contradiction
+visible, follows the machine-readable minimum, and rejects `0` locally.
 
 ## Configuration reference
 

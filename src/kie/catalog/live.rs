@@ -535,6 +535,14 @@ impl CatalogEntry {
         }
     }
 
+    pub fn schema_summary(&self) -> &'static str {
+        match self.schema_status {
+            SchemaStatus::Authoritative => "authoritative",
+            SchemaStatus::Informational => "informational",
+            SchemaStatus::Unavailable => "unavailable",
+        }
+    }
+
     pub fn convenience_summary(&self) -> Vec<&str> {
         let mut fields = Vec::new();
         if let Some(field) = self.aspect_ratio_field.as_deref() {
@@ -1249,6 +1257,25 @@ paths:
                 .validate(&json!({ "first_frame_url": "https://example.test/frame.png" }))
                 .is_ok()
         );
+    }
+
+    #[test]
+    fn direct_request_example_can_downgrade_a_contradictory_schema() {
+        let schema = json!({
+            "type": "object",
+            "properties": {
+                "duration": { "type": "number" }
+            }
+        });
+        let media = json!({
+            "example": {
+                "model": "example/video",
+                "input": { "duration": "5" }
+            }
+        });
+
+        let warning = documented_example_warning(&json!({}), &media, &schema).unwrap();
+        assert!(warning.contains("input.duration must be number, got string"));
     }
 
     #[test]
