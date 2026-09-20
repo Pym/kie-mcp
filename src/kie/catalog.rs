@@ -329,7 +329,7 @@ mod tests {
 
     #[test]
     fn compact_catalog_covers_market_image_video_models() {
-        assert_eq!(model_catalog().len(), 130);
+        assert_eq!(model_catalog().len(), 135);
         assert!(model_catalog().iter().all(|model| !matches!(
             model.id,
             "grok-imagine-image-2-0/segment-map"
@@ -381,6 +381,17 @@ mod tests {
     #[test]
     fn latest_market_image_video_models_are_cataloged() {
         let expected = [
+            ("gpt-image-2-5-flare-text-to-image", GenerationKind::Image),
+            ("gpt-image-2-5-flare-image-to-image", GenerationKind::Image),
+            (
+                "gpt-image-2-5-sunburst-text-to-image",
+                GenerationKind::Image,
+            ),
+            (
+                "gpt-image-2-5-sunburst-image-to-image",
+                GenerationKind::Image,
+            ),
+            ("google/gemini-omni-flash-1-1", GenerationKind::Video),
             ("seedream/5-pro-layer-decomposition", GenerationKind::Image),
             (
                 "grok-imagine-image-2-0/text-to-image",
@@ -675,7 +686,7 @@ mod tests {
                 .iter()
                 .filter(|model| model.prompt_policy == PromptPolicy::Required)
                 .count(),
-            108
+            113
         );
     }
 

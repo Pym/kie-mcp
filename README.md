@@ -126,9 +126,9 @@ The five preparation tools are composable. The server does not call them
 silently.
 
 - Gemini Omni Audio returns an `audio_id`. Pass it to Gemini Omni Character or
-  to `gemini-omni-video` through `input.audio_ids`.
+  to `gemini-omni-video` or `google/gemini-omni-flash-1-1` through `input.audio_ids`.
 - Gemini Omni Character returns a `character_id`. Pass it to
-  `gemini-omni-video` through `input.character_ids`.
+  `gemini-omni-video` or `google/gemini-omni-flash-1-1` through `input.character_ids`.
 - Grok Segment Map returns a source `task_id` and numbered masks. Generate the
   targeted edit with `kie_generate_image` and
   `model: grok-imagine-image-2-0/segment-edit`. Supply the edit prompt, put the

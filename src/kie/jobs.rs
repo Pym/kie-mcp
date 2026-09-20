@@ -889,6 +889,9 @@ mod tests {
             ("kling-3.0/video", 2),
             ("kling/v3-turbo-image-to-video", 1),
             ("gemini-omni-video", 7),
+            ("google/gemini-omni-flash-1-1", 7),
+            ("gpt-image-2-5-flare-image-to-image", 16),
+            ("gpt-image-2-5-sunburst-image-to-image", 16),
             ("happyhorse/image-to-video", 1),
         ];
 

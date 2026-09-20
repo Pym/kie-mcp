@@ -119,6 +119,15 @@ Preserve exact-key uniqueness and update
 test locks every embedded request profile. Do not copy full route schemas into
 the binary.
 
+The 2026-09-20 refresh includes 135 embedded image/video models. It adds GPT
+Image 2.5 Flare and Sunburst in text-to-image and image-to-image variants, plus
+`google/gemini-omni-flash-1-1` for video. The GPT variants accept `aspect_ratio`
+and `resolution`; image-to-image variants bind up to 16 `input_urls`. Their
+`background` option passes through raw `input`. Gemini Omni Flash binds up to
+seven `image_urls`, accepts `aspect_ratio` and `resolution`, and requires
+`input.duration` alongside the prompt. Its first/last frames, video clips, audio
+IDs, and character IDs pass through raw `input`, as with Gemini Omni Video.
+
 Grok Segment Map and the two OmniHuman preparation models live in
 `operations.rs`, so a caller cannot send them through `kie_generate_image` or
 `kie_generate_video`. Gemini Omni Audio and Character use separate endpoints

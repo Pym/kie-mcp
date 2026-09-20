@@ -9,12 +9,12 @@ fn embedded_catalog_matches_reviewed_kie_contract_snapshot() {
         serde_json::to_value(model_catalog()).expect("embedded catalog should serialize to JSON");
 
     assert_eq!(snapshot["source"], CATALOG_SOURCE);
-    assert_eq!(snapshot["verified_at"], "2026-08-28");
+    assert_eq!(snapshot["verified_at"], "2026-09-20");
     assert_eq!(
         snapshot["llms_sha256"],
-        "1f2e479b07265e9bd5b422e00009aa929fe6a8b5f1ff8c74a02a1cd56668bd01"
+        "25cbf7311abb80a2e743ea33838490eb8ec4c1be7aeddfdb93d5c02f284b4823"
     );
-    assert_eq!(snapshot["models"].as_array().unwrap().len(), 130);
+    assert_eq!(snapshot["models"].as_array().unwrap().len(), 135);
     assert_eq!(
         snapshot["models"], actual,
         "catalog metadata changed: review the corresponding KIE model pages before updating \

@@ -38,6 +38,10 @@ pub(super) static MODELS: &[ModelSpec] = &[
     model("gpt-image/1.5-image-to-image", "GPT Image-1.5 - Image to Image", I, profile(ua("input_urls", Some(16)), AR, QUALITY, OF_NONE), &[]),
     model("gpt-image-2-text-to-image", "GPT Image-2 - Text to Image", I, profile(un(), AR, RES, OF_NONE), &["GPT Image 2 Text To Image"]),
     model("gpt-image-2-image-to-image", "GPT Image 2 - Image To Image", I, profile(ua("input_urls", Some(16)), AR, RES, OF_NONE), &["GPT Image 2 Image To Image"]),
+    model("gpt-image-2-5-flare-text-to-image", "GPT Image 2.5 Flare - Text to Image", I, profile(un(), AR, RES, OF_NONE), &[]),
+    model("gpt-image-2-5-flare-image-to-image", "GPT Image 2.5 Flare - Image To Image", I, profile(ua("input_urls", Some(16)), AR, RES, OF_NONE), &[]),
+    model("gpt-image-2-5-sunburst-text-to-image", "GPT Image 2.5 Sunburst - Text to Image", I, profile(un(), AR, RES, OF_NONE), &[]),
+    model("gpt-image-2-5-sunburst-image-to-image", "GPT Image 2.5 Sunburst - Image To Image", I, profile(ua("input_urls", Some(16)), AR, RES, OF_NONE), &[]),
     model("topaz/image-upscale", "Topaz - Image Upscale", I, no_prompt(profile(us("image_url"), NO_FIELD, NO_FIELD, OF_NONE)), &[]),
     model("recraft/remove-background", "Recraft - Remove Background", I, no_prompt(profile(us("image"), NO_FIELD, NO_FIELD, OF_NONE)), &[]),
     model("recraft/crisp-upscale", "Recraft - Crisp Upscale", I, no_prompt(profile(us("image"), NO_FIELD, NO_FIELD, OF_NONE)), &[]),
@@ -134,6 +138,7 @@ pub(super) static MODELS: &[ModelSpec] = &[
     model("happyhorse-1-1/text-to-video", "HappyHorse-1-1 text-to-video", V, profile(un(), AR, RES, OF_NONE), &[]),
     model("happyhorse-1-1/reference-to-video", "HappyHorse-1-1 reference-to-video", V, profile(ua("reference_image", Some(9)), AR, RES, OF_NONE), &[]),
     model("gemini-omni-video", "Gemini Omni Video", V, profile(ua("image_urls", Some(7)), AR, RES, OF_NONE), &[]),
+    model("google/gemini-omni-flash-1-1", "Gemini Omni 1.1 Flash", V, profile(ua("image_urls", Some(7)), AR, RES, OF_NONE), &[]),
     model("omnihuman-1-5", "Omnihuman 1.5", V, optional_prompt(profile(un(), NO_FIELD, OUT_RES, OF_NONE)), &[]),
     model("volcengine/video-to-video-lip-sync", "Volcengine video to video lip sync", V, no_prompt(profile(un(), NO_FIELD, NO_FIELD, OF_NONE)), &[]),
 ];

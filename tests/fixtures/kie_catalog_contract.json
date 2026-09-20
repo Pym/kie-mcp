@@ -1,7 +1,7 @@
 {
   "source": "https://docs.kie.ai/llms.txt",
-  "verified_at": "2026-08-28",
-  "llms_sha256": "1f2e479b07265e9bd5b422e00009aa929fe6a8b5f1ff8c74a02a1cd56668bd01",
+  "verified_at": "2026-09-20",
+  "llms_sha256": "25cbf7311abb80a2e743ea33838490eb8ec4c1be7aeddfdb93d5c02f284b4823",
   "models": [
     {
       "display_name": "Seedream3.0 - Text to Image",
@@ -411,6 +411,58 @@
       "aspect_ratio_field": "aspect_ratio",
       "display_name": "GPT Image 2 - Image To Image",
       "id": "gpt-image-2-image-to-image",
+      "kind": "image",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "resolution_field": "resolution",
+      "url_binding": {
+        "field": "input_urls",
+        "max_items": 16,
+        "type": "array"
+      }
+    },
+    {
+      "aspect_ratio_field": "aspect_ratio",
+      "display_name": "GPT Image 2.5 Flare - Text to Image",
+      "id": "gpt-image-2-5-flare-text-to-image",
+      "kind": "image",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "resolution_field": "resolution",
+      "url_binding": {
+        "type": "none"
+      }
+    },
+    {
+      "aspect_ratio_field": "aspect_ratio",
+      "display_name": "GPT Image 2.5 Flare - Image To Image",
+      "id": "gpt-image-2-5-flare-image-to-image",
+      "kind": "image",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "resolution_field": "resolution",
+      "url_binding": {
+        "field": "input_urls",
+        "max_items": 16,
+        "type": "array"
+      }
+    },
+    {
+      "aspect_ratio_field": "aspect_ratio",
+      "display_name": "GPT Image 2.5 Sunburst - Text to Image",
+      "id": "gpt-image-2-5-sunburst-text-to-image",
+      "kind": "image",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "resolution_field": "resolution",
+      "url_binding": {
+        "type": "none"
+      }
+    },
+    {
+      "aspect_ratio_field": "aspect_ratio",
+      "display_name": "GPT Image 2.5 Sunburst - Image To Image",
+      "id": "gpt-image-2-5-sunburst-image-to-image",
       "kind": "image",
       "output_format": "none",
       "prompt_policy": "required",
@@ -1571,6 +1623,20 @@
       "aspect_ratio_field": "aspect_ratio",
       "display_name": "Gemini Omni Video",
       "id": "gemini-omni-video",
+      "kind": "video",
+      "output_format": "none",
+      "prompt_policy": "required",
+      "resolution_field": "resolution",
+      "url_binding": {
+        "field": "image_urls",
+        "max_items": 7,
+        "type": "array"
+      }
+    },
+    {
+      "aspect_ratio_field": "aspect_ratio",
+      "display_name": "Gemini Omni 1.1 Flash",
+      "id": "google/gemini-omni-flash-1-1",
       "kind": "video",
       "output_format": "none",
       "prompt_policy": "required",
